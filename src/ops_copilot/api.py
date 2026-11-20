@@ -19,8 +19,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -41,8 +40,9 @@ QUEUE_WAIT_S = 5.0
 MAX_CONCURRENT_ASKS = 2
 
 CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+    "frame-ancestors 'none'"
 )
 SECURITY_HEADERS: dict[bytes, bytes] = {
     b"content-security-policy": CSP.encode(),
@@ -50,6 +50,20 @@ SECURITY_HEADERS: dict[bytes, bytes] = {
     b"x-frame-options": b"DENY",
     b"referrer-policy": b"no-referrer",
 }
+# refusal_reason is a bounded enum: the API never forwards any other string to the browser.
+REFUSAL_REASONS = frozenset(
+    {
+        "below_gate",
+        "model_refused",
+        "no_valid_citations",
+        "invalid_citation",
+        "invalid_characters",
+        "empty_question",
+        "no_context",
+        "question_too_long",
+    }
+)
+REFUSAL_FALLBACK = "refused"
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 
@@ -80,6 +94,14 @@ def _safe(obj: Any) -> Any:
     if isinstance(obj, list | tuple):
         return [_safe(v) for v in obj]
     return obj
+
+
+def _bound_reason(result: AskResult) -> AskResult:
+    """Unknown refusal_reason -> "refused" (None stays None)."""
+    reason = result.get("refusal_reason")
+    if reason is None or (isinstance(reason, str) and reason in REFUSAL_REASONS):
+        return result
+    return {**result, "refusal_reason": REFUSAL_FALLBACK}  # type: ignore[typeddict-item]
 
 
 def _bare_host(host: str) -> str:
@@ -193,6 +215,10 @@ def create_app(
     sim_p = Path(sim_dir) if sim_dir else REPO_ROOT / "data" / "sim"
     eval_p = Path(eval_path) if eval_path else REPO_ROOT / "eval" / "latest.json"
     web_p = Path(web_dir) if web_dir else REPO_ROOT / "web"
+    if not docs_p.is_dir():
+        # Fail loudly at start: serving an empty catalog would hide a misconfigured deployment.
+        log.error("docs directory not found: %s", docs_p)
+        raise FileNotFoundError(f"docs directory not found: {docs_p}")
 
     app = FastAPI(debug=False, title="Ops Copilot", docs_url=None, redoc_url=None, openapi_url=None)
     state: dict[str, Pipeline | None] = {"pipeline": pipeline}
@@ -228,14 +254,6 @@ def create_app(
             slots.release()
 
     app.add_middleware(HardeningMiddleware, hosts=allowed_hosts_from_env(allowed_hosts))
-
-    @app.exception_handler(RequestValidationError)
-    async def _validation(_: Request, __: RequestValidationError) -> JSONResponse:
-        return _err(422, "invalid request")  # never echo the input
-
-    @app.exception_handler(HTTPException)
-    async def _http(_: Request, exc: HTTPException) -> JSONResponse:
-        return _err(exc.status_code, exc.detail if isinstance(exc.detail, str) else "error")
 
     @app.post("/api/ask")
     async def ask(request: Request) -> JSONResponse:
@@ -275,7 +293,7 @@ def create_app(
             return _err(502, "upstream model error")
         if result is None:
             return _err(503, "model backend unavailable")
-        return JSONResponse(_safe(result))
+        return JSONResponse(_safe(_bound_reason(result)))
 
     @app.get("/api/docs")
     async def docs() -> list[dict[str, Any]]:

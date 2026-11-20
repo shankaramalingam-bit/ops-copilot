@@ -13,6 +13,34 @@ from .ingest import load_docs
 _HEADING = re.compile(r"^(#{2,3})\s+(.*)$", re.M)
 
 
+SUMMARY_MAX = 200
+_SECTION_1 = re.compile(r"^##\s+1\.?\s.*$", re.M)
+_NEXT_H2 = re.compile(r"^##\s", re.M)
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
+
+
+def summarise(text: str) -> str:
+    """First sentence of the first body line under section 1 (Purpose), at most 200 chars.
+
+    Taken verbatim from the cleaned text (a substring of it); "" if there is no such line.
+    """
+    m = _SECTION_1.search(text)
+    if not m:
+        return ""
+    rest = text[m.end() :]
+    nxt = _NEXT_H2.search(rest)
+    body = rest[: nxt.start()] if nxt else rest
+    for line in body.splitlines():
+        line = line.strip()
+        if not line or line[0] in "#-*|>":
+            continue
+        sentence = _SENTENCE_END.split(line, maxsplit=1)[0]
+        if len(sentence) > SUMMARY_MAX:
+            sentence = sentence[:SUMMARY_MAX].rsplit(" ", 1)[0]
+        return sentence.rstrip()
+    return ""
+
+
 def load_catalog(docs_dir: str | Path) -> list[dict[str, Any]]:
     """One entry per document: front matter plus numbered ## / ### headings. No LLM."""
     out: list[dict[str, Any]] = []
@@ -30,6 +58,7 @@ def load_catalog(docs_dir: str | Path) -> list[dict[str, Any]]:
                 "version": doc.metadata.get("version", ""),
                 "effective_date": doc.metadata.get("effective_date", ""),
                 "sections": sections,
+                "summary": summarise(doc.text),
             }
         )
     return out

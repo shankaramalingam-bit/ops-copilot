@@ -348,7 +348,7 @@ def test_docs_catalog():
     assert {d["doc_id"] for d in docs} == EXPECTED_DOCS
     for d in docs:
         assert set(d) == {
-            "doc_id", "title", "owner_role", "version", "effective_date", "sections"
+            "doc_id", "title", "owner_role", "version", "effective_date", "sections", "summary"
         }  # fmt: skip
         assert d["title"] and d["owner_role"] and d["version"] and d["effective_date"]
         assert len(d["sections"]) >= 3
