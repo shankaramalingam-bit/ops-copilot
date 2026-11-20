@@ -1,0 +1,19 @@
+{
+  "as_of": "2026-11-20",
+  "receipts": [
+    {"receipt_id": "RCV-5101", "date": "2026-11-20", "po": "PO-2270", "supplier": "Granite Fasteners", "item": "Rack bolts and washers", "ordered_qty": 800, "received_qty": 800, "status": "putaway pending", "exception": null},
+    {"receipt_id": "RCV-5102", "date": "2026-11-20", "po": "PO-2274", "supplier": "Bluewater Packaging", "item": "Pallet wrap and edge protectors", "ordered_qty": 600, "received_qty": 600, "status": "quarantined",
+     "exception": {"type": "damaged", "policy": "WH-003", "detail": "2 cartons crushed, 48 units damaged; noted on bill of lading, photographed", "damaged_qty": 48, "disposition": "quarantined in OS&D lane"},
+     "ask": "RCV-5102 from Bluewater Packaging arrived with damaged cartons — what do we have to do and by when?"},
+    {"receipt_id": "RCV-5103", "date": "2026-11-20", "po": "PO-2269", "supplier": "Summit Industrial Supply", "item": "Stretch film cores", "ordered_qty": 1000, "received_qty": 1080, "status": "held",
+     "exception": {"type": "over_shipment", "policy": "WH-003", "detail": "Received 80 units over the ordered quantity", "over_pct": 8.0, "disposition": "held in OS&D hold lane pending buyer decision"},
+     "ask": "RCV-5103 from Summit Industrial Supply is 8% over the ordered quantity — can we receive it?"},
+    {"receipt_id": "RCV-5104", "date": "2026-11-19", "po": "PO-2282", "supplier": "Northfield Pallet Co", "item": "Block pallets", "ordered_qty": 500, "received_qty": 460, "status": "received short",
+     "exception": {"type": "short_shipment", "policy": "WH-003", "detail": "Short by 40 units; balance open on PO-2282", "short_qty": 40, "disposition": "received for counted quantity; Procurement notified"},
+     "ask": "RCV-5104 from Northfield Pallet Co is short 40 units — what happens to the balance and who do we notify?"},
+    {"receipt_id": "RCV-5105", "date": "2026-11-19", "po": "PO-2266", "supplier": "Alder Lane Electronics", "item": "Barcode label printer heads", "ordered_qty": 1200, "received_qty": 1200, "status": "received",
+     "exception": {"type": "price_mismatch", "policy": "FIN-001", "detail": "Invoice unit price $14.90 vs PO unit price $14.50", "po_unit_price": 14.5, "invoice_unit_price": 14.9, "variance_pct": 2.76, "variance_usd": 480.0, "invoice_status": "held", "routed_to": "Buyer"},
+     "ask": "The invoice for PO-2266 is 2.76% above the PO price — is that inside the 3-way match tolerance and what happens to the invoice?"},
+    {"receipt_id": "RCV-5106", "date": "2026-11-20", "po": "PO-2279", "supplier": "Redcliff Chemicals", "item": "Floor cleaning concentrate (hazmat)", "ordered_qty": 120, "received_qty": 120, "status": "putaway pending", "exception": null}
+  ]
+}
