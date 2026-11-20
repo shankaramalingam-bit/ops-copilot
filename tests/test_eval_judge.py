@@ -223,3 +223,247 @@ def test_allow_remote_from_real_environment_is_honoured(harness, monkeypatch):
     monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     monkeypatch.setenv("EVAL_ALLOW_REMOTE", "1")
     assert run_eval.main() == 0
+
+
+# ---- rate-limit tolerance (unit F4)
+
+MSG_CANARY = "org_CANARY_f4_secret_org_id_987"
+
+
+class FakeRateLimit(Exception):
+    def __init__(self, msg: str = f"429 too many requests {MSG_CANARY}") -> None:
+        super().__init__(msg)
+        self.status_code = 429
+
+
+class RateLimitError(Exception):  # matched by class name alone
+    pass
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Fake clock + sleep: sleeping advances the clock; records every sleep."""
+    state: dict[str, Any] = {"now": 0.0, "sleeps": [], "events": []}
+
+    def fake_sleep(s):
+        state["sleeps"].append(s)
+        state["events"].append(("sleep", s))
+        state["now"] += s
+
+    monkeypatch.setattr(run_eval, "_sleep", fake_sleep)
+    monkeypatch.setattr(run_eval, "_clock", lambda: state["now"])
+    return state
+
+
+class _FlakyChat:
+    def __init__(self, n_fail, exc=FakeRateLimit, answer="YES"):
+        self.n_fail, self.exc, self.answer, self.calls = n_fail, exc, answer, 0
+
+    def invoke(self, messages):
+        self.calls += 1
+        if self.calls <= self.n_fail:
+            raise self.exc()
+        answer = self.answer
+
+        class M:
+            content = answer
+
+        return M()
+
+
+def test_is_rate_limit():
+    assert run_eval.is_rate_limit(FakeRateLimit())
+    assert run_eval.is_rate_limit(RateLimitError())
+    assert not run_eval.is_rate_limit(ValueError("x"))
+    e = Exception()
+    e.status_code = 500  # type: ignore[attr-defined]
+    assert not run_eval.is_rate_limit(e)
+
+
+def test_judge_retries_and_counts(clock):
+    chat = _FlakyChat(3)
+    ok, raw, retries = run_eval.judge_with_retry(chat, "ctx", "claim")
+    assert (ok, raw, retries) == (True, "YES", 3)
+    assert chat.calls == 4
+    assert clock["sleeps"] == [10, 20, 40]
+
+
+def test_judge_class_name_only_match(clock):
+    chat = _FlakyChat(1, exc=RateLimitError)
+    assert run_eval.judge_with_retry(chat, "c", "x")[2] == 1
+
+
+def test_judge_max_attempts_reraises(clock):
+    chat = _FlakyChat(99)
+    with pytest.raises(FakeRateLimit):
+        run_eval.judge_with_retry(chat, "c", "x")
+    assert chat.calls == run_eval.MAX_ATTEMPTS == 6
+    assert clock["sleeps"] == [10, 20, 40, 60, 60]
+
+
+def test_non_429_propagates_immediately(clock):
+    chat = _FlakyChat(5, exc=lambda: ValueError("boom"))
+    with pytest.raises(ValueError):
+        run_eval.judge_with_retry(chat, "c", "x")
+    assert chat.calls == 1
+    assert clock["sleeps"] == []
+
+    class Pipe:
+        calls = 0
+
+        def ask(self, q, mode):
+            Pipe.calls += 1
+            raise KeyError("nope")
+
+    with pytest.raises(KeyError):
+        run_eval.timed_ask(Pipe(), "q")
+    assert Pipe.calls == 1
+
+
+def test_generator_retry_latency_excludes_failures_and_backoff(clock):
+    class Pipe:
+        calls = 0
+
+        def ask(self, q, mode):
+            Pipe.calls += 1
+            clock["now"] += 5.0  # time spent in a failed or successful attempt
+            if Pipe.calls <= 2:
+                raise FakeRateLimit()
+            clock["now"] += 0.25  # extra cost of the successful attempt only
+            return {"answer": "a"}
+
+    res, latency_ms, retries = run_eval.timed_ask(Pipe(), "q")
+    assert res == {"answer": "a"}
+    assert retries == 2
+    assert Pipe.calls == 3
+    assert clock["sleeps"] == [10, 20]
+    assert latency_ms == pytest.approx(5250.0)
+
+
+def test_generator_max_attempts_reraises(clock):
+    class Pipe:
+        calls = 0
+
+        def ask(self, q, mode):
+            Pipe.calls += 1
+            raise FakeRateLimit()
+
+    with pytest.raises(FakeRateLimit):
+        run_eval.timed_ask(Pipe(), "q")
+    assert Pipe.calls == 6
+
+
+@pytest.mark.parametrize("bad", ["abc", "-1", "nan", "inf", "-0.5", "1e999x"])
+def test_parse_pace_invalid(bad):
+    with pytest.raises(ValueError) as ei:
+        run_eval.parse_pace({"EVAL_PACE_S": bad})
+    assert "EVAL_PACE_S" in str(ei.value)
+    assert bad not in str(ei.value)
+
+
+def test_parse_pace_valid():
+    assert run_eval.parse_pace({}) == 0.0
+    assert run_eval.parse_pace({"EVAL_PACE_S": ""}) == 0.0
+    assert run_eval.parse_pace({"EVAL_PACE_S": " 2.5 "}) == 2.5
+    assert run_eval.parse_pace({"EVAL_PACE_S": "0"}) == 0.0
+
+
+def test_main_invalid_pace_exits_2_without_echo(harness, monkeypatch, capsys):
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setenv("EVAL_PACE_S", "bogus-value-xyz")
+    assert run_eval.main() == 2
+    cap = capsys.readouterr()
+    assert "EVAL_PACE_S" in cap.err
+    assert "bogus-value-xyz" not in cap.out + cap.err
+
+
+def test_pacing_sleeps_outside_timed_region(clock):
+    class Pipe:
+        def ask(self, q, mode):
+            clock["events"].append(("ask_start", clock["now"]))
+            clock["now"] += 1.5
+            return {"answer": "a"}
+
+    _, latency_ms, retries = run_eval.timed_ask(Pipe(), "q", pace_s=7.0)
+    assert retries == 0
+    assert clock["events"][0] == ("sleep", 7.0)
+    assert clock["events"][1][0] == "ask_start"
+    assert latency_ms == pytest.approx(1500.0)
+
+    clock["events"].clear()
+    chat = _FlakyChat(0)
+    run_eval.judge_with_retry(chat, "c", "x", pace_s=3.0)
+    assert clock["events"] == [("sleep", 3.0)]
+    assert chat.calls == 1
+
+
+def test_backoff_print_has_no_exception_message(clock, capsys):
+    run_eval.judge_with_retry(_FlakyChat(2), "c", "x")
+    out = capsys.readouterr()
+    text = out.out + out.err
+    assert MSG_CANARY not in text
+    assert "429" not in text
+    assert "rate limited (FakeRateLimit); waiting 10s" in text
+    assert "waiting 20s" in text
+
+
+def test_main_records_retries_and_pace(harness, monkeypatch, clock):
+    import ops_copilot.llm as llm
+    import ops_copilot.pipeline as pipeline
+
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setenv("EVAL_PACE_S", "1.5")
+    q = {
+        "id": "Q1",
+        "type": "factual",
+        "question": "what?",
+        "expected_docs": ["SOP-001"],
+        "expected_sections": ["1"],
+        "expected_answer_points": ["p"],
+    }
+    monkeypatch.setattr(run_eval, "load_questions", lambda path=None: [q])
+
+    class Pipe:
+        calls = 0
+
+        def __init__(self, settings):
+            pass
+
+        def ask(self, question, mode):
+            Pipe.calls += 1
+            clock["now"] += 2.0
+            if Pipe.calls == 1:
+                raise FakeRateLimit()
+            return {
+                "answer": "The dock opens at six every morning [SOP-001 § 1].",
+                "refused": False,
+                "refusal_reason": None,
+                "citations": [{"doc_id": "SOP-001", "valid": True}],
+                "confidence": 1.0,
+                "timings_ms": {},
+                "chunks": [
+                    {
+                        "id": "SOP-001#1",
+                        "text": "dock opens at six",
+                        "used": True,
+                        "bm25_rank": 1,
+                        "dense_rank": 1,
+                        "rrf": 0.1,
+                    }
+                ],
+            }
+
+    chat = _FlakyChat(2)
+    monkeypatch.setattr(pipeline, "Pipeline", Pipe)
+    monkeypatch.setattr(llm, "get_chat_model", lambda settings: chat)
+    _, _, tmp_path = harness
+    assert run_eval.main() == 0
+    detail = json.loads(next((tmp_path / "results").glob("*.json")).read_text())
+    rec = detail["questions"][0]
+    assert detail["pace_s"] == 1.5
+    assert rec["rate_limit_retries"] == 1
+    assert rec["judge_rate_limit_retries"] == 2
+    assert rec["latency_ms"] == pytest.approx(2000.0)
+    latest = json.loads((tmp_path / "latest.json").read_text())
+    assert list(latest) == run_eval.LATEST_KEYS
+    assert "rate_limit_retries" not in latest["questions"][0]

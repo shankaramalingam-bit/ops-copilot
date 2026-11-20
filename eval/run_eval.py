@@ -18,6 +18,12 @@ Per-question `passed` (see eval/report.md):
                 docs among the valid citations; ambiguous also needs a labelled "If you mean"
                 reading.
 
+Rate limits (e.g. Groq free tier): an HTTP 429 / RateLimitError from the generator or the judge
+is retried after an untimed backoff (10, 20, 40, 60, 60 s; 6 attempts, then re-raised). Latency is
+measured only around the successful generator attempt, so what is measured is unchanged. Optional
+EVAL_PACE_S (seconds, default 0) adds an untimed sleep before every generator and judge call.
+Retry counts are recorded per question in eval/results/<stamp>.json (not in latest.json).
+
 Faithfulness limitation: by default the judge is the same model that wrote the answer, so it
 shares the generator's blind spots. EVAL_JUDGE_MODEL can name a different (not smaller) judge.
 """
@@ -326,6 +332,78 @@ def load_questions(path: Path | None = None) -> list[dict[str, Any]]:
     return list(data["questions"])
 
 
+# ---------------------------------------------------------------- rate-limit tolerance
+
+_sleep = time.sleep  # monkeypatched in tests
+_clock = time.perf_counter  # monkeypatched in tests
+BACKOFF_S: tuple[float, ...] = (10, 20, 40, 60, 60)
+MAX_ATTEMPTS = len(BACKOFF_S) + 1
+
+
+def is_rate_limit(e: BaseException) -> bool:
+    """HTTP 429 or a RateLimitError, without importing any provider SDK."""
+    return getattr(e, "status_code", None) == 429 or type(e).__name__ == "RateLimitError"
+
+
+def call_with_backoff(fn: Any) -> tuple[Any, int]:
+    """Run fn(); on a rate limit sleep (untimed) and retry. Returns (result, retries).
+    Other exceptions propagate unchanged; after MAX_ATTEMPTS the rate-limit error is re-raised.
+    Only the exception class name is printed (provider messages can contain org ids)."""
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            return fn(), attempt
+        except Exception as e:
+            if not is_rate_limit(e) or attempt == MAX_ATTEMPTS - 1:
+                raise
+            wait = BACKOFF_S[attempt]
+            print(f"rate limited ({type(e).__name__}); waiting {wait:g}s", flush=True)
+            _sleep(wait)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def parse_pace(env: Mapping[str, str] | None = None) -> float:
+    """EVAL_PACE_S as non-negative finite seconds (default 0). Raises ValueError with a message
+    that names only the variable."""
+    e = os.environ if env is None else env
+    raw = e.get("EVAL_PACE_S", "").strip()
+    if not raw:
+        return 0.0
+    try:
+        v = float(raw)
+    except ValueError:
+        v = math.nan
+    if not math.isfinite(v) or v < 0:
+        raise ValueError("EVAL_PACE_S must be a non-negative number of seconds")
+    return v
+
+
+def timed_ask(pipe: Any, question: str, pace_s: float = 0.0) -> tuple[Any, float, int]:
+    """pipe.ask with pacing and rate-limit retry. Returns (result, latency_ms, retries); latency
+    covers only the successful attempt."""
+    if pace_s > 0:
+        _sleep(pace_s)
+    box: list[float] = []
+
+    def attempt() -> Any:
+        t0 = _clock()
+        res = pipe.ask(question, "hybrid")
+        box.append((_clock() - t0) * 1000.0)
+        return res
+
+    res, retries = call_with_backoff(attempt)
+    return res, box[-1], retries
+
+
+def judge_with_retry(
+    chat: Any, context: str, claim: str, pace_s: float = 0.0
+) -> tuple[bool, str, int]:
+    """_judge with pacing and rate-limit retry (untimed). Returns (ok, raw, retries)."""
+    if pace_s > 0:
+        _sleep(pace_s)
+    (ok, raw), retries = call_with_backoff(lambda: _judge(chat, context, claim))
+    return ok, raw, retries
+
+
 # ---------------------------------------------------------------- live run
 
 
@@ -386,6 +464,11 @@ def main() -> int:
     if problem is not None:
         print(problem, file=sys.stderr)
         return 2
+    try:
+        pace_s = parse_pace()
+    except ValueError as err:
+        print(f"refusing: {err}", file=sys.stderr)
+        return 2
     qs = load_questions()
     pipe = Pipeline(s)
     judge = get_chat_model(judge_settings(s, judge_model))  # temperature 0
@@ -394,9 +477,7 @@ def main() -> int:
     verdicts: list[list[bool]] = []
 
     for q in qs:
-        t0 = time.perf_counter()
-        res = pipe.ask(q["question"], "hybrid")
-        latency = (time.perf_counter() - t0) * 1000.0
+        res, latency, gen_retries = timed_ask(pipe, q["question"], pace_s)
         chunks = res["chunks"]
         retrieved = [c["id"].split("#")[0] for c in chunks]
         exp = q["expected_docs"]
@@ -406,6 +487,7 @@ def main() -> int:
         cov = coverage(retrieved, exp) if answerable and len(exp) > 1 else None
 
         judged: list[dict[str, Any]] = []
+        judge_retries = 0
         faith: float | None = None
         if not res["refused"]:
             used_text = {c["id"]: c["text"] for c in chunks if c["used"]}
@@ -422,7 +504,8 @@ def main() -> int:
                     )
                 ] or list(used_text)
                 ctx = "\n\n".join(used_text[c] for c in ctx_ids)
-                ok, raw = _judge(judge, ctx, claim)
+                ok, raw, n_retry = judge_with_retry(judge, ctx, claim, pace_s)
+                judge_retries += n_retry
                 vs.append(ok)
                 judged.append(
                     {"claim": claim, "supported": ok, "judge_raw": raw, "chunks": ctx_ids}
@@ -451,6 +534,8 @@ def main() -> int:
         full.append(
             {
                 **rec,
+                "rate_limit_retries": gen_retries,
+                "judge_rate_limit_retries": judge_retries,
                 "expected_sections": q["expected_sections"],
                 "expected_answer_points": q["expected_answer_points"],
                 "coverage_at_4": cov,
@@ -488,6 +573,7 @@ def main() -> int:
         "provider": s.llm_provider,
         "generator_model": generator_model,
         "judge_model": judge_model,
+        "pace_s": pace_s,
         "questions": full,
         "kpi_pass": kpi_status(metrics),
     }
