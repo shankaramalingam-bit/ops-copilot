@@ -130,7 +130,7 @@ def test_judge_uses_eval_judge_model_and_generator_uses_groq_model(harness, monk
     assert [b.groq_model for b in built] == ["llama-3.1-405b"]  # only the judge is built here
     assert built[0].llm_provider == "groq"
     out = capsys.readouterr().out
-    assert "generator model=llama-3.3-70b-versatile judge model=llama-3.1-405b" in out
+    assert "generator model='llama-3.3-70b-versatile' judge model='llama-3.1-405b'" in out
     detail = json.loads(next((tmp_path / "results").glob("*.json")).read_text())
     assert detail["provider"] == "groq"
     assert detail["generator_model"] == "llama-3.3-70b-versatile"
@@ -146,7 +146,7 @@ def test_judge_defaults_to_generator_and_blank_is_unset(harness, monkeypatch, ca
     monkeypatch.setenv("EVAL_JUDGE_MODEL", "   ")
     assert run_eval.main() == 0
     assert built[0].groq_model == "llama-3.3-70b-versatile"
-    assert "judge model=llama-3.3-70b-versatile" in capsys.readouterr().out
+    assert "judge model='llama-3.3-70b-versatile'" in capsys.readouterr().out
 
 
 def test_ollama_provider_judge_gets_ollama_model(harness, monkeypatch):
@@ -188,6 +188,8 @@ def test_canary_key_never_printed_on_success(harness, monkeypatch, capsys):
     assert cap.out and CANARY not in cap.out + cap.err
     detail = next((harness[2] / "results").glob("*.json")).read_text()
     assert CANARY not in detail
+    assert CANARY not in (harness[2] / "latest.json").read_text()
+    assert "judge='llama-3.3-70b-versatile'" in cap.out  # summary line uses repr
 
 
 def test_canary_key_never_printed_on_remote_guard_refusal(harness, monkeypatch, capsys):
@@ -196,3 +198,28 @@ def test_canary_key_never_printed_on_remote_guard_refusal(harness, monkeypatch, 
     assert run_eval.main() == 2
     cap = capsys.readouterr()
     assert CANARY not in cap.out + cap.err
+
+
+def test_allow_remote_from_dotenv_is_ignored(harness, monkeypatch, capsys):
+    """A .env (simulated by load_env_file setting os.environ) must not enable remote."""
+    import os
+
+    import ops_copilot.config as config
+
+    monkeypatch.delenv("EVAL_ALLOW_REMOTE")
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    def dotenv_load() -> None:
+        os.environ["EVAL_ALLOW_REMOTE"] = "1"
+        os.environ["LLM_PROVIDER"] = "groq"
+
+    monkeypatch.setattr(config, "load_env_file", dotenv_load)
+    assert run_eval.main() == 2
+    assert "refusing" in capsys.readouterr().err
+    monkeypatch.delenv("EVAL_ALLOW_REMOTE", raising=False)
+
+
+def test_allow_remote_from_real_environment_is_honoured(harness, monkeypatch):
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setenv("EVAL_ALLOW_REMOTE", "1")
+    assert run_eval.main() == 0

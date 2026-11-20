@@ -1,10 +1,11 @@
 """RAG evaluation over the 15 owner-approved questions (eval/questions.yaml).
 
-Builds the real Pipeline (OllamaEmbeddings + ChatOllama, temperature 0), asks every question in
-hybrid mode, computes the metrics in code and writes eval/results/<timestamp>.json (full
-records) and eval/latest.json (the shape the UI reads).
+Builds the real Pipeline (embeddings on Ollama; LLM via LLM_PROVIDER=ollama|groq, temperature 0),
+asks every question in hybrid mode, computes the metrics in code and writes
+eval/results/<timestamp>.json (full records) and eval/latest.json (the shape the UI reads).
 
-Usage (loads .env like the app does; EVAL_ALLOW_REMOTE=1 is needed for a remote provider):
+Usage (loads .env like the app does; EVAL_ALLOW_REMOTE=1 is needed for a remote provider and is
+read only from the real process environment, set on the command line or in the shell, never .env):
   LLM_PROVIDER=groq GROQ_MODEL=llama-3.3-70b-versatile EVAL_ALLOW_REMOTE=1 \
       python eval/run_eval.py
 Optional EVAL_JUDGE_MODEL names the judge model (default: the generator model). The run refuses
@@ -371,14 +372,16 @@ def main() -> int:
     from ops_copilot.llm import get_chat_model
     from ops_copilot.pipeline import Pipeline
 
+    # read BEFORE load_env_file(): a .env file must not be able to enable remote providers
+    allow_remote = os.environ.get("EVAL_ALLOW_REMOTE", "")
     load_env_file()  # same as the app's entry point; does not override existing env
     s = Settings.from_env()
-    refusal = guard_local_provider(s)
+    refusal = guard_local_provider(s, {"EVAL_ALLOW_REMOTE": allow_remote})
     if refusal is not None:
         return refusal
     generator_model = generator_model_name(s)
     judge_model = os.environ.get("EVAL_JUDGE_MODEL", "").strip() or generator_model
-    print(f"generator model={generator_model} judge model={judge_model}", flush=True)
+    print(f"generator model={generator_model!r} judge model={judge_model!r}", flush=True)
     problem = check_judge_model(generator_model, judge_model)
     if problem is not None:
         print(problem, file=sys.stderr)
@@ -492,7 +495,7 @@ def main() -> int:
     (EVAL_DIR / "latest.json").write_text(json.dumps(latest, indent=2) + "\n")
 
     print("\n=== summary ===")
-    print(f"run_at={run_at} model={generator_model} judge={judge_model}")
+    print(f"run_at={run_at} model={generator_model!r} judge={judge_model!r}")
     print(f"embed={s.embed_model} gate={s.gate_threshold}")
     for k in METRIC_KEYS:
         print(f"  {k:<18} {metrics[k]}")
