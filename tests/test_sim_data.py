@@ -1,6 +1,7 @@
 """Offline consistency checks: simulated dashboard data vs. the corpus rules."""
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -203,3 +204,64 @@ def test_dates_are_iso_around_2026_11(pos: list[dict], receipts: list[dict]) -> 
         assert date.fromisoformat(r["date"]).strftime("%Y-%m") == "2026-11"
     for p in pos:
         assert date.fromisoformat(p["created"]).year == 2026
+
+
+def _nums(text: str) -> set[str]:
+    """Numbers, amounts and percents in a string, thousands separators removed."""
+    return {m.replace(",", "") for m in re.findall(r"\$?\d[\d,]*(?:\.\d+)?%?", text)}
+
+
+def _usd(v: float) -> str:
+    return f"${v:,.0f}".replace(",", "")
+
+
+def _ids(text: str) -> set[str]:
+    return set(re.findall(r"\b(?:PO|RCV)-\d+\b", text))
+
+
+def test_po_asks_match_record_fields(pos: list[dict]) -> None:
+    checked = 0
+    for p in pos:
+        if "ask" not in p:
+            continue
+        ask = p["ask"]
+        assert _ids(ask) == {p["po"]}, p["po"]
+        expected = {_usd(p["total_usd"])}
+        if "original_total_usd" in p:
+            expected.add(_usd(p["original_total_usd"]))
+        assert _nums(re.sub(r"(?:PO|RCV)-\d+", "", ask)) == expected, p["po"]
+        checked += 1
+    assert checked == 6
+
+
+def test_receipt_asks_match_record_fields(receipts: list[dict]) -> None:
+    checked = 0
+    for r in receipts:
+        if "ask" not in r:
+            continue
+        e = r["exception"]
+        ask = r["ask"]
+        rest = re.sub(r"(?:PO|RCV)-\d+", "", ask)
+        if e["type"] == "damaged":
+            assert _ids(ask) == {r["receipt_id"]}
+            assert _nums(rest) == set()
+        elif e["type"] == "over_shipment":
+            assert _ids(ask) == {r["receipt_id"]}
+            assert _nums(rest) == {f"{e['over_pct']:g}%"}
+        elif e["type"] == "short_shipment":
+            assert _ids(ask) == {r["receipt_id"]}
+            assert _nums(rest) == {str(e["short_qty"])}
+        elif e["type"] == "price_mismatch":
+            assert _ids(ask) == {r["po"]}
+            assert _nums(rest.replace("3-way", "")) == {f"{e['variance_pct']:g}%"}
+        else:
+            raise AssertionError(e["type"])
+        checked += 1
+    assert checked == 4
+
+
+def test_supplier_asks_name_their_supplier(suppliers: list[dict]) -> None:
+    probation = [s for s in suppliers if s["status"] == "probation"]
+    assert probation
+    for s in probation:
+        assert s["name"] in s["ask"], s["name"]

@@ -23,7 +23,7 @@ DOC_IDS = [
 # doc_id -> (section number that must contain the facts, strings that must appear in it)
 FACTS: dict[str, list[tuple[str, list[str]]]] = {
     "WH-001": [
-        ("3.1", ["ASN", "PO"]),
+        ("3.1", ["advance ship notice (ASN)", "purchase order (PO)"]),
         ("5.1", ["4 hours"]),
         ("6.1", ["hazmat", "cage zone H"]),
         ("2.1", ["bill of lading"]),
@@ -174,7 +174,11 @@ def test_mandated_facts(doc_id: str, number: str, needles: list[str]) -> None:
     section = _section(_read(doc_id), number)
     lowered = section.lower()
     for needle in needles:
-        assert needle.lower() in lowered, f"{doc_id} §{number} missing {needle!r}"
+        if needle.isupper() or needle.endswith(")"):
+            # acronyms / exact phrases: case-sensitive
+            assert needle in section, f"{doc_id} §{number} missing {needle!r}"
+        else:
+            assert needle.lower() in lowered, f"{doc_id} §{number} missing {needle!r}"
 
 
 @pytest.mark.parametrize("doc_id", DOC_IDS)
@@ -197,3 +201,133 @@ def test_ambiguity_preserved() -> None:
     # Two documents carry approval limits; two carry reporting deadlines.
     assert "Approval Limits" in _read("PR-001") and "Approval Limits" in _read("WH-005")
     assert "within 24 hours" in _read("WH-003") and "within 1 business day" in _read("QA-001")
+
+
+# ---------------------------------------------------------------- pairing tests
+
+
+def _table_rows(section: str) -> list[tuple[str, str]]:
+    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$", section, re.M)
+    body = [(a, b) for a, b in rows if not set(a) <= set("-")]
+    return body[1:]  # drop the header row
+
+
+def test_pr001_band_rows_pair_band_with_approver() -> None:
+    rows = _table_rows(_section(_read("PR-001"), "2.1"))
+    assert rows == [
+        ("Up to $5,000", "Buyer"),
+        ("$5,000 to $25,000", "Procurement Manager"),
+        ("$25,000 to $100,000", "Director of Operations"),
+        ("Above $100,000", "CFO"),
+    ]
+
+
+def test_wh005_band_rows_pair_band_with_approver() -> None:
+    rows = _table_rows(_section(_read("WH-005"), "2.1"))
+    assert rows == [
+        ("Up to $500", "Warehouse Supervisor"),
+        ("$500 to $5,000", "Inventory Control Manager"),
+        ("Above $5,000", "Director of Operations plus Finance"),
+    ]
+
+
+def test_wh005_section_2_2_threshold_and_both_approvers() -> None:
+    s = _section(_read("WH-005"), "2.2")
+    assert re.search(
+        r"adjustment above \$5,000 needs the approval of both the Director of Operations "
+        r"and a member of the Finance team",
+        s,
+    )
+
+
+def test_fin001_exceptions_routed_to_buyer() -> None:
+    assert re.search(r"Every exception is routed to the buyer named on the PO\.", _read("FIN-001"))
+    assert "routed to the buyer" in _section(_read("FIN-001"), "3.1")
+
+
+def test_boundary_sentences() -> None:
+    pr = _section(_read("PR-001"), "2.1")
+    assert re.search(
+        r"A PO of exactly \$5,000, \$25,000 or \$100,000 is approved by the lower band\.", pr
+    )
+    wh = _section(_read("WH-005"), "2.1")
+    assert re.search(
+        r"An adjustment of exactly \$500 is approved by the Warehouse Supervisor, and an "
+        r"adjustment of exactly \$5,000 by the Inventory Control Manager\.",
+        wh,
+    )
+
+
+def test_probation_has_no_po_approval_rule() -> None:
+    s = _section(_read("QA-001"), "4.2")
+    assert not re.search(r"\bPOs?\b|sign-off|approv", s, re.I)
+
+
+def test_approval_authority_only_in_pr001_and_wh005() -> None:
+    # Other docs may refer to the approval limits but must not name an approver role.
+    roles = r"(Buyer|Procurement Manager|Director of Operations|CFO|Supervisor|Control Manager)"
+    for doc_id in DOC_IDS:
+        if doc_id in ("PR-001", "WH-005"):
+            continue
+        for raw in _read(doc_id).splitlines():
+            line = raw.replace("Approved Supplier List", "ASL")
+            assert not (re.search(r"approv|sign-off", line, re.I) and re.search(roles, line)), (
+                f"{doc_id}: competing approval statement: {line}"
+            )
+
+
+# ------------------------------------------------- conflicting-number guard
+
+
+def _corpus() -> str:
+    return "\n".join(_read(d) for d in DOC_IDS)
+
+
+# (regex with one capture group, expected value). Every match in the corpus must equal it,
+# and there must be at least one match (positive control).
+NUMBER_RULES: dict[str, tuple[str, str]] = {
+    "putaway hours": (r"put\s+away\s+within\s+(\d+)\s+hours?", "4"),
+    "cycle-count tolerance pct": (r"variance is within ±(\d+)%", "2"),
+    "cycle-count tolerance usd": (r"±\d+% of the system quantity or \$(\d+)", "250"),
+    "OS&D notify hours": (r"notified of every OS&D exception within (\d+) hours", "24"),
+    "overage pct": (r"overages? (?:up to and including|above) (\d+)%", "5"),
+    "carrier claim days": (r"claim against the carrier must be filed within (\d+) days", "30"),
+    "carrier claim days (heading)": (r"Carrier claim within (\d+) days", "30"),
+    "RMA validity days": (r"RMA number is valid for (\d+) days", "30"),
+    "inspect business days": (r"inspected within (\d+) business days", "2"),
+    "restocking pct": (r"(\d+)% restocking fee", "15"),
+    "insurance usd": (r"\$(\d+)M general liability", "2"),
+    "provisional days": (r"[Pp]rovisional status lasts (\d+) days", "90"),
+    "NCR business days": (r"raised within (\d+) business day", "1"),
+    "SCAR business days": (r"respond within (\d+) business days", "10"),
+    "NCR count": (r"receives (\d+) NCRs in \d+ months", "3"),
+    "NCR months": (r"receives \d+ NCRs in (\d+) months", "6"),
+    "price tolerance pct": (r"within ±(\d+)% or \$\d+", "2"),
+    "price tolerance usd": (r"within ±\d+% or \$(\d+)", "50"),
+    "net terms": (r"\b[Nn]et (\d+)\b", "45"),
+    "cut-off time": (r"received (?:by|after) (\d+) pm", "3"),
+    "fill rate": (r"fill-rate target for Tier-1 accounts is (\d+)%", "98"),
+    "damage-claim hours": (r"acknowledged within (\d+) business hours", "4"),
+    "RMA-credit days": (r"credit is issued within (\d+) days", "5"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(NUMBER_RULES))
+def test_governing_number_consistent_across_corpus(name: str) -> None:
+    pattern, expected = NUMBER_RULES[name]
+    found = re.findall(pattern, _corpus())
+    assert found, f"positive control empty for {name}"
+    assert set(found) == {expected}, f"{name}: {found}"
+
+
+def test_no_conflicting_sentence_level_numbers() -> None:
+    """Sentence-level guard: hours near 'putaway' must be 4; days near 'carrier' must be 30."""
+    seen_putaway = seen_carrier = False
+    for sentence in re.split(r"(?<=[.!?])\s+", _corpus()):
+        if re.search(r"put\s*away", sentence, re.I):
+            seen_putaway |= bool(re.search(r"\d+\s+hours", sentence))
+            assert set(re.findall(r"(\d+)\s+hours", sentence)) <= {"4"}, sentence
+        if re.search(r"carrier", sentence, re.I):
+            seen_carrier |= bool(re.search(r"\d+\s+days", sentence))
+            assert set(re.findall(r"(\d+)\s+days", sentence)) <= {"30"}, sentence
+    assert seen_putaway and seen_carrier  # positive controls
