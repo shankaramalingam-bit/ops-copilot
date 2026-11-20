@@ -331,3 +331,51 @@ def test_no_conflicting_sentence_level_numbers() -> None:
             seen_carrier |= bool(re.search(r"\d+\s+days", sentence))
             assert set(re.findall(r"(\d+)\s+days", sentence)) <= {"30"}, sentence
     assert seen_putaway and seen_carrier  # positive controls
+
+
+# ------------------------------------------- no invented approval-routing rules
+
+_PO_WORDS = re.compile(r"\bPOs?\b|purchase orders?|\btrial orders?\b|\borders?\b", re.I)
+
+
+def _sentences() -> list[tuple[str, str]]:
+    out = []
+    for d in DOC_IDS:
+        for s in re.split(r"(?<=[.!?])\s+|\n+", _read(d)):
+            out.append((d, s))
+    return out
+
+
+def test_sentence_splitter_positive_control() -> None:
+    assert any(d == "PR-001" and "Approvers" in s for d, s in _sentences())
+
+
+def test_no_po_escalation_to_another_band_or_approver() -> None:
+    pat = re.compile(
+        r"escalat\w*|next band|higher band|next approver|next level|passes? to the|"
+        r"reassign\w*|auto-?approv\w*",
+        re.I,
+    )
+    for d, s in _sentences():
+        if _PO_WORDS.search(s):
+            assert not pat.search(s), f"{d}: PO routing to another approver: {s}"
+
+
+def test_no_orders_permitted_to_suppliers_off_the_asl() -> None:
+    off_asl = re.compile(
+        r"not (?:yet )?(?:completed )?onboard\w*|"
+        r"not (?:yet )?on the (?:Approved Supplier List|ASL)|"
+        r"(?:before|without) (?:the supplier is |being )?onboard\w*|"
+        r"not (?:yet )?(?:been )?(?:approved|qualified)|trial orders?|"
+        r"unapproved supplier|non-ASL",
+        re.I,
+    )
+    prohibition = re.compile(
+        r"\bare rejected\b|\bis rejected\b|\bmust not be (?:issued|placed|approved)", re.I
+    )
+    checked = False
+    for d, s in _sentences():
+        if _PO_WORDS.search(s) and off_asl.search(s):
+            checked = True
+            assert prohibition.search(s), f"{d}: order to non-ASL supplier permitted: {s}"
+    assert checked  # positive control: PR-001 §5.1 rejection sentence is seen
