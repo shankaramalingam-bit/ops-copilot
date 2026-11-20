@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from .config import Settings
+from .config import Secret, Settings
 
 
 def get_chat_model(settings: Settings) -> BaseChatModel:
@@ -13,10 +13,12 @@ def get_chat_model(settings: Settings) -> BaseChatModel:
         from langchain_groq import ChatGroq
         from pydantic import SecretStr
 
+        key = settings.groq_api_key
+
         return ChatGroq(
             model=settings.groq_model,
             temperature=0,
-            api_key=SecretStr(settings.groq_api_key or ""),
+            api_key=SecretStr(key.get() if isinstance(key, Secret) else (key or "")),
         )
     from langchain_ollama import ChatOllama
 

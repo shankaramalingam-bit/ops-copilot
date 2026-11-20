@@ -30,7 +30,7 @@ def test_groq_without_key_errors_without_echoing_env():
 
 def test_groq_with_key_ok_and_repr_masks_key():
     s = Settings.from_env({"LLM_PROVIDER": "groq", "GROQ_API_KEY": FAKE_KEY})
-    assert s.groq_api_key == FAKE_KEY
+    assert s.groq_api_key is not None and s.groq_api_key.get() == FAKE_KEY
     for text in (repr(s), str(s), f"{s}"):
         assert FAKE_KEY not in text and "groq_api_key=***" in text
 

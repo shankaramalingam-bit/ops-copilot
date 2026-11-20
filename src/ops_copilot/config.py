@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -20,12 +21,50 @@ def load_env_file() -> None:
     load_dotenv()
 
 
+class Secret:
+    """Holds a secret string. repr/str are masked; read it only via .get().
+
+    Slots (no __dict__) and copy/pickle never expose the value, so dataclasses.asdict, vars(),
+    json default=str and logging of a Settings object cannot leak it.
+    """
+
+    __slots__ = ("_v",)
+
+    def __init__(self, value: str) -> None:
+        self._v = value
+
+    def get(self) -> str:
+        return self._v
+
+    def __repr__(self) -> str:
+        return "Secret(***)"
+
+    __str__ = __repr__
+
+    def __bool__(self) -> bool:
+        return bool(self._v)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Secret) and other._v == self._v
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __copy__(self) -> Secret:
+        return self
+
+    def __deepcopy__(self, memo: dict[int, object]) -> Secret:
+        return self
+
+    def __reduce__(self) -> str | tuple[object, ...]:
+        raise TypeError("Secret cannot be pickled")
+
+
 @dataclass
 class Settings:
     llm_provider: str = "ollama"
     ollama_model: str = "llama3.1:8b"
     ollama_base_url: str = "http://localhost:11434"
-    groq_api_key: str | None = field(default=None, repr=False)
+    groq_api_key: Secret | str | None = field(default=None, repr=False)
     groq_model: str = "llama-3.1-8b-instant"
     embed_model: str = "nomic-embed-text"
     top_k: int = 4
@@ -40,12 +79,22 @@ class Settings:
         self.llm_provider = self.llm_provider.strip().lower()
         if self.llm_provider not in PROVIDERS:
             raise ConfigError(f"LLM_PROVIDER must be one of {PROVIDERS}")
-        if self.groq_api_key is not None and not self.groq_api_key.strip():
-            self.groq_api_key = None
+        key = self.groq_api_key
+        if isinstance(key, str):
+            key = Secret(key) if key.strip() else None
+        elif isinstance(key, Secret) and not key.get().strip():
+            key = None
+        self.groq_api_key = key
         if self.llm_provider == "groq" and not self.groq_api_key:
             raise ConfigError("LLM_PROVIDER=groq requires GROQ_API_KEY to be set")
-        if self.top_k < 1 or self.rrf_k < 1 or self.candidates < 1:
-            raise ConfigError("top_k, rrf_k and candidates must be >= 1")
+        if not (math.isfinite(self.gate_threshold) and 0.0 <= self.gate_threshold <= 1.0):
+            raise ConfigError("gate_threshold must be a finite number in [0, 1]")
+        if not 1 <= self.top_k <= 20:
+            raise ConfigError("top_k must be in 1..20")
+        if not self.top_k <= self.candidates <= 100:
+            raise ConfigError("candidates must be in top_k..100")
+        if not 1 <= self.rrf_k <= 1000:
+            raise ConfigError("rrf_k must be in 1..1000")
 
     def __repr__(self) -> str:
         key = "***" if self.groq_api_key else "None"

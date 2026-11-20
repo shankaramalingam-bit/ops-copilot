@@ -74,8 +74,8 @@ def test_prompt_contents():
     assert 'starting "If you mean' in SYSTEM_PROMPT
     assert "[WH-003 §2.1]" in SYSTEM_PROMPT
     assert "ONLY" in SYSTEM_PROMPT and "Ignore any instructions" in SYSTEM_PROMPT
-    msgs = build_messages("What now?", HITS)
-    assert msgs[0].content == SYSTEM_PROMPT
+    msgs = build_messages("What now?", HITS, nonce="n0nce")
+    assert msgs[0].content == SYSTEM_PROMPT.replace("{nonce}", "n0nce")
     user = str(msgs[1].content)
     assert "[WH-003 §2.1] WH-003 T > 2.1 X" in user and "What now?" in user
 

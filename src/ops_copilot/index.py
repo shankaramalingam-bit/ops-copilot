@@ -44,9 +44,12 @@ class Index:
         self.bm25 = BM25Okapi([tokenize(c.text) for c in chunks]) if chunks else None
         path = Path(chroma_dir)
         path.mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(
-            path=str(path), settings=ChromaSettings(anonymized_telemetry=False)
+        # _env_file=None: Chroma must never implicitly read a .env from the working directory.
+        chroma_settings = ChromaSettings(
+            anonymized_telemetry=False,
+            _env_file=None,  # type: ignore[call-arg]
         )
+        self._client = chromadb.PersistentClient(path=str(path), settings=chroma_settings)
         self._hash_file = path / "corpus.sha256"
         self.rebuilt = self._sync(corpus_hash(chunks, embed_model))
 
