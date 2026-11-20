@@ -174,7 +174,7 @@ def test_s7_empty_question_refuses_without_calls(tmp_path, embeddings, q):
 
     emb = CountingEmb(embeddings)
     chat = CountingChat(responses=["x"])
-    s = Settings(gate_threshold=1e-9, chroma_dir=str(tmp_path / "c"), docs_dir=str(FIXTURE_DOCS))
+    s = Settings(gate_threshold=0.05, chroma_dir=str(tmp_path / "c"), docs_dir=str(FIXTURE_DOCS))
     p = Pipeline(s, emb, chat, FIXTURE_DOCS)  # type: ignore[arg-type]
     r = p.ask(q)
     assert r["refused"] and r["refusal_reason"] == "empty_question" and r["answer"] == REFUSAL
@@ -200,6 +200,7 @@ def test_s8_zero_hits_in_mode_refuses(make_pipeline):
     [
         {"gate_threshold": float("nan")},
         {"gate_threshold": 0.0},
+        {"gate_threshold": 0.049},
         {"gate_threshold": float("inf")},
         {"gate_threshold": -0.1},
         {"gate_threshold": 1.1},
@@ -219,7 +220,7 @@ def test_s9_invalid_settings_rejected(kw):
 @pytest.mark.parametrize(
     "kw",
     [
-        {"gate_threshold": 1e-9},
+        {"gate_threshold": 0.05},
         {"gate_threshold": 1.0},
         {"top_k": 1, "candidates": 1},
         {"top_k": 20, "candidates": 100},

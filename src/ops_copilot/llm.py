@@ -9,6 +9,7 @@ from .config import Secret, Settings
 
 LLM_TIMEOUT_S = 60
 LLM_MAX_RETRIES = 1
+MAX_OUTPUT_TOKENS = 512  # output cap: answers are short; bounds cost and finalize() input
 
 
 def get_chat_model(settings: Settings) -> BaseChatModel:
@@ -21,6 +22,7 @@ def get_chat_model(settings: Settings) -> BaseChatModel:
         return ChatGroq(
             model=settings.groq_model,
             temperature=0,
+            max_tokens=MAX_OUTPUT_TOKENS,
             timeout=LLM_TIMEOUT_S,
             max_retries=LLM_MAX_RETRIES,
             api_key=SecretStr(key.get() if isinstance(key, Secret) else (key or "")),
@@ -32,6 +34,7 @@ def get_chat_model(settings: Settings) -> BaseChatModel:
         model=settings.ollama_model,
         base_url=settings.ollama_base_url,
         temperature=0,
+        num_predict=MAX_OUTPUT_TOKENS,
         client_kwargs={"timeout": LLM_TIMEOUT_S},
     )
 

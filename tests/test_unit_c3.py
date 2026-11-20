@@ -9,7 +9,13 @@ import time
 import pytest
 
 from ops_copilot import config
-from ops_copilot.answer import REFUSAL, finalize, is_refusal, neutralise_question
+from ops_copilot.answer import (
+    REFUSAL,
+    finalize,
+    is_refusal,
+    neutralise_question,
+    normalise_text,
+)
 from ops_copilot.config import ConfigError, Settings
 from ops_copilot.types import Chunk, Hit
 
@@ -55,7 +61,9 @@ PROBES = [
 @pytest.mark.parametrize("probe", PROBES)
 def test_m1_probe_with_valid_citation_is_refused(probe):
     f = finalize(f"{VALID} {probe}", HITS)
-    assert f.refused and f.refusal_reason == "invalid_citation", probe
+    # c.4: "¶" and "⟦⟧" are outside the character allowlist: refused earlier, as invalid_characters
+    expected = "invalid_characters" if any(c in probe for c in "¶⟦⟧") else "invalid_citation"
+    assert f.refused and f.refusal_reason == expected, probe
     assert f.answer == REFUSAL and f.citations == [] and f.used == [False] * len(HITS)
 
 
@@ -69,16 +77,17 @@ def test_m1_probe_list_nonempty_and_not_vacuous():
     "raw",
     [
         "Any PO change is approved under PR-001 [PR-001 §2].",
-        "Per WH-003: do X [WH-003 §2.1]. Also wh-003 says Y [WH-003 §2.2].",
+        "Per WH-003: do X [WH-003 §2.1]. Also WH-003 says Y [WH-003 §2.2].",  # c.4: uppercase only
         "Do X ［WH-003 §2.1］.",  # fullwidth brackets normalise to canonical
         "Do X [WH-003 §2.1] and Y [PR-001 §2].  See PR-001 and WH-003.",
         "Do​ X [WH-003 §2.1].",  # ZWSP elsewhere is harmless
     ],
 )
-def test_m1_legit_answers_accepted_and_original_text_returned(raw):
+def test_m1_legit_answers_accepted_and_sanitised_text_returned(raw):
     f = finalize(raw, HITS)
     assert not f.refused and f.refusal_reason is None, raw
-    assert f.answer == raw.strip()  # original, not the normalised form
+    # c.4: what was validated is what is returned (sanitised), not the raw text
+    assert f.answer == normalise_text(raw).strip()
     assert f.citations and all(c["valid"] for c in f.citations)
 
 
@@ -89,7 +98,9 @@ def test_m1_bare_doc_of_uncited_doc_refused():
 
 def test_m1_section_word_in_non_citation_bracket_refused():
     assert finalize("Do X [WH-003 §2.1] [Section 4].", HITS).refusal_reason == "invalid_citation"
-    assert finalize("Do X [WH-003 §2.1] (¶3).", HITS).refusal_reason == "invalid_citation"
+    # c.4: "¶" is outside the character allowlist
+    assert finalize("Do X [WH-003 §2.1] (¶3).", HITS).refusal_reason == "invalid_characters"
+    assert finalize("Do X [WH-003 §2.1] (section 3).", HITS).refusal_reason == "invalid_citation"
 
 
 def test_m1_no_valid_citations_has_empty_citations():
@@ -169,7 +180,9 @@ def test_l1_non_refusal_not_detected():
 def test_l2_gate_threshold_must_be_positive():
     with pytest.raises(ConfigError):
         Settings(gate_threshold=0.0)
-    Settings(gate_threshold=1e-9)
+    with pytest.raises(ConfigError):
+        Settings(gate_threshold=1e-9)
+    Settings(gate_threshold=0.05)  # c.4 L7: floor is 0.05
     Settings(gate_threshold=1.0)
     with pytest.raises(ConfigError):
         Settings(gate_threshold=1.0000001)

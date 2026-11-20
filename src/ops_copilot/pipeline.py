@@ -63,8 +63,10 @@ class Pipeline:
 
     def ask(self, question: str, mode: str = "hybrid") -> AskResult:
         s = self.settings
-        too_long = len(question) > MAX_QUESTION_CHARS
-        if too_long or not normalise_text(question).strip():
+        # Cap the raw AND the normalised length (NFKC can expand: one char -> up to 18).
+        norm = normalise_text(question) if len(question) <= MAX_QUESTION_CHARS else ""
+        too_long = len(question) > MAX_QUESTION_CHARS or len(norm) > MAX_QUESTION_CHARS
+        if too_long or not norm.strip():
             t = time.perf_counter()
             decision = gate.check(0.0, s.gate_threshold)
             zero: TimingsOut = {

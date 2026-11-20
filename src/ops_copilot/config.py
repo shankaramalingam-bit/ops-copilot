@@ -6,10 +6,20 @@ import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 PROVIDERS = ("ollama", "groq")
 # Hard cap on question length (chars). A constant: not environment-tunable.
 MAX_QUESTION_CHARS = 2000
+MIN_GATE_THRESHOLD = 0.05
+
+
+def _valid_base_url(url: str) -> bool:
+    try:
+        u = urlsplit(url)
+        return u.scheme in ("http", "https") and bool(u.hostname)
+    except ValueError:
+        return False
 
 
 class ConfigError(ValueError):
@@ -90,8 +100,12 @@ class Settings:
         object.__setattr__(self, "groq_api_key", key)
         if self.llm_provider == "groq" and not self.groq_api_key:
             raise ConfigError("LLM_PROVIDER=groq requires GROQ_API_KEY to be set")
-        if not (math.isfinite(self.gate_threshold) and 0.0 < self.gate_threshold <= 1.0):
-            raise ConfigError("gate_threshold must be a finite number in (0, 1]")
+        if not (
+            math.isfinite(self.gate_threshold) and MIN_GATE_THRESHOLD <= self.gate_threshold <= 1.0
+        ):
+            raise ConfigError(f"gate_threshold must be finite, in [{MIN_GATE_THRESHOLD}, 1]")
+        if not _valid_base_url(self.ollama_base_url):
+            raise ConfigError("OLLAMA_BASE_URL must be an http or https URL with a host")
         if not 1 <= self.top_k <= 20:
             raise ConfigError("top_k must be in 1..20")
         if not self.top_k <= self.candidates <= 100:
