@@ -11,6 +11,9 @@ __pycache__/
 # Notebooks
 .ipynb_checkpoints/
 
+# Agent worktrees (other agents' in-progress copies)
+.claude/worktrees/
+
 # Data caches
 data/cache/
 .cache/
