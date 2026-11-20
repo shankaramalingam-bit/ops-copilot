@@ -1,0 +1,242 @@
+{
+  "run_at": "2026-11-20T09:03:41+00:00",
+  "embed_model": "nomic-embed-text",
+  "chosen_threshold": 0.61,
+  "balanced_accuracy": 0.95,
+  "tpr": 1.0,
+  "tnr": 0.9,
+  "tied_optimal_thresholds": [
+    "0.61",
+    "0.63"
+  ],
+  "distribution": {
+    "answerable": {
+      "n": 16,
+      "min": 0.630565881729126,
+      "p25": 0.7163040488958359,
+      "median": 0.7674728631973267,
+      "p75": 0.8258192837238312,
+      "max": 0.854864776134491,
+      "mean": 0.7665296532213688
+    },
+    "unanswerable": {
+      "n": 10,
+      "min": 0.5012779831886292,
+      "p25": 0.5259469747543335,
+      "median": 0.5766249001026154,
+      "p75": 0.6047563552856445,
+      "max": 0.6638838052749634,
+      "mean": 0.5720133304595947
+    }
+  },
+  "questions": [
+    {
+      "id": "C1",
+      "label": "answerable",
+      "question": "What happens to hazardous material once the receiving record is closed?",
+      "source": "WH-001 \u00a76.1",
+      "max_cosine": 0.701262354850769,
+      "top_chunk": "WH-001#6.1#0"
+    },
+    {
+      "id": "C2",
+      "label": "answerable",
+      "question": "Which dock door do hazmat loads go to?",
+      "source": "WH-001 \u00a72.2",
+      "max_cosine": 0.7143206000328064,
+      "top_chunk": "WH-001#2.2#0"
+    },
+    {
+      "id": "C3",
+      "label": "answerable",
+      "question": "For how many years are receiving records retained?",
+      "source": "WH-001 \u00a77.1",
+      "max_cosine": 0.7537534832954407,
+      "top_chunk": "WH-001#7.1#0"
+    },
+    {
+      "id": "C4",
+      "label": "answerable",
+      "question": "What variance can be accepted in a count without triggering a recount?",
+      "source": "WH-002 \u00a74.1",
+      "max_cosine": 0.7968363165855408,
+      "top_chunk": "WH-002#4.1#0"
+    },
+    {
+      "id": "C5",
+      "label": "answerable",
+      "question": "What is the inventory accuracy target for counted locations?",
+      "source": "WH-002 \u00a76.5",
+      "max_cosine": 0.822699248790741,
+      "top_chunk": "WH-002#6.5#0"
+    },
+    {
+      "id": "C6",
+      "label": "answerable",
+      "question": "What is the deadline for filing a claim against the carrier?",
+      "source": "WH-003 \u00a76.1",
+      "max_cosine": 0.8244074583053589,
+      "top_chunk": "WH-003#6.1#0"
+    },
+    {
+      "id": "C7",
+      "label": "answerable",
+      "question": "How big an overage may the buyer choose to receive?",
+      "source": "WH-003 \u00a73.1",
+      "max_cosine": 0.7222543954849243,
+      "top_chunk": "WH-003#3.1#0"
+    },
+    {
+      "id": "C8",
+      "label": "answerable",
+      "question": "Is a restocking fee charged on a return that is not defective?",
+      "source": "WH-004 \u00a75.1",
+      "max_cosine": 0.8455950021743774,
+      "top_chunk": "WH-004#5.1#0"
+    },
+    {
+      "id": "C9",
+      "label": "answerable",
+      "question": "Within how many days must a returned item be inspected?",
+      "source": "WH-004 \u00a73.2",
+      "max_cosine": 0.7602778077125549,
+      "top_chunk": "WH-004#3.2#0"
+    },
+    {
+      "id": "C10",
+      "label": "answerable",
+      "question": "Which role signs off a purchase order worth $60,000?",
+      "source": "PR-001 \u00a72.1",
+      "max_cosine": 0.630565881729126,
+      "top_chunk": "PR-001#1.1#0"
+    },
+    {
+      "id": "C11",
+      "label": "answerable",
+      "question": "When is a sole-source justification form required?",
+      "source": "PR-001 \u00a73.1",
+      "max_cosine": 0.7746679186820984,
+      "top_chunk": "PR-001#3.1#0"
+    },
+    {
+      "id": "C12",
+      "label": "answerable",
+      "question": "How many days does a new supplier stay on provisional status?",
+      "source": "PR-002 \u00a73.1",
+      "max_cosine": 0.839905858039856,
+      "top_chunk": "PR-002#3.1#0"
+    },
+    {
+      "id": "C13",
+      "label": "answerable",
+      "question": "How many NCRs in six months put a supplier on probation?",
+      "source": "QA-001 \u00a74.1",
+      "max_cosine": 0.854864776134491,
+      "top_chunk": "QA-001#4.1#0"
+    },
+    {
+      "id": "C14",
+      "label": "answerable",
+      "question": "What payment terms apply to supplier invoices by default?",
+      "source": "FIN-001 \u00a74.1",
+      "max_cosine": 0.6581578850746155,
+      "top_chunk": "FIN-001#4.1#0"
+    },
+    {
+      "id": "C15",
+      "label": "answerable",
+      "question": "How quickly must a Tier-1 customer's damage claim be acknowledged?",
+      "source": "CS-001 \u00a74.1",
+      "max_cosine": 0.8262898921966553,
+      "top_chunk": "CS-001#4.1#0"
+    },
+    {
+      "id": "C16",
+      "label": "answerable",
+      "question": "What fill rate does Meridian target for its top accounts?",
+      "source": "CS-001 \u00a73.2",
+      "max_cosine": 0.7386155724525452,
+      "top_chunk": "CS-001#3.2#0"
+    },
+    {
+      "id": "U1",
+      "label": "unanswerable",
+      "question": "How many days of paid time off do warehouse employees get each year?",
+      "source": null,
+      "max_cosine": 0.6056913733482361,
+      "top_chunk": "WH-001#5.1#0"
+    },
+    {
+      "id": "U2",
+      "label": "unanswerable",
+      "question": "How should a forklift battery be charged and swapped?",
+      "source": null,
+      "max_cosine": 0.5012779831886292,
+      "top_chunk": "WH-004#4.2#0"
+    },
+    {
+      "id": "U3",
+      "label": "unanswerable",
+      "question": "Which EDI message formats do suppliers use to send advance ship notices?",
+      "source": null,
+      "max_cosine": 0.6638838052749634,
+      "top_chunk": "WH-001#3.1#0"
+    },
+    {
+      "id": "U4",
+      "label": "unanswerable",
+      "question": "Where can employees park at the distribution centre?",
+      "source": null,
+      "max_cosine": 0.5778986811637878,
+      "top_chunk": "WH-001#5.3#0"
+    },
+    {
+      "id": "U5",
+      "label": "unanswerable",
+      "question": "What is the company holiday calendar for next year?",
+      "source": null,
+      "max_cosine": 0.5573844909667969,
+      "top_chunk": "WH-002#2.2#0"
+    },
+    {
+      "id": "U6",
+      "label": "unanswerable",
+      "question": "What is the unit price of SKU 8820 from Summit Packaging?",
+      "source": null,
+      "max_cosine": 0.517154335975647,
+      "top_chunk": "WH-004#5.1#0"
+    },
+    {
+      "id": "U7",
+      "label": "unanswerable",
+      "question": "What is the safety stock level for item 3305?",
+      "source": null,
+      "max_cosine": 0.604444682598114,
+      "top_chunk": "WH-004#6.4#0"
+    },
+    {
+      "id": "U8",
+      "label": "unanswerable",
+      "question": "What is the lunch break policy for dock staff?",
+      "source": null,
+      "max_cosine": 0.5881689786911011,
+      "top_chunk": "WH-003#1.1#0"
+    },
+    {
+      "id": "U9",
+      "label": "unanswerable",
+      "question": "What is the contracted freight rate on the Chicago lane?",
+      "source": null,
+      "max_cosine": 0.5753511190414429,
+      "top_chunk": "WH-001#2.1#0"
+    },
+    {
+      "id": "U10",
+      "label": "unanswerable",
+      "question": "How do I reset my warehouse system password?",
+      "source": null,
+      "max_cosine": 0.528877854347229,
+      "top_chunk": "WH-001#2.1#0"
+    }
+  ]
+}

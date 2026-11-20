@@ -64,6 +64,14 @@ Answer ONLY from the context blocks provided in the user message. Use no other k
 Cite every claim as [DOC-ID §section], for example [WH-003 §2.1], using the label of the \
 context block that supports it. Use one citation per bracket, e.g. [WH-003 §2.1] [WH-003 §2.2]; \
 never combine several sections or a range in one bracket.
+Citation format rules: write the citation exactly as [DOC-ID §section] with square brackets and \
+a space before the § sign. Never use parentheses, ranges or the word "Section" in a citation. \
+Use square brackets for citations only, never for anything else. Do not write any other \
+reference numbers (such as SOP-12, PO-2291 or Tier-2) outside citations.
+Write plain ASCII text (the § sign in citations is the only exception). \
+Spell out comparisons in words: "more than", "less than", "at least", \
+"up to", "to". Do not use the symbols < > or arrows or similar signs. Quote figures, amounts \
+and durations exactly as they appear in the context.
 If the question has several plausible readings, answer each reading in its own labelled \
 paragraph starting "If you mean ..." with its own citations. Do not ask a clarifying question.
 If the context does not answer the question, reply with exactly this sentence and nothing \

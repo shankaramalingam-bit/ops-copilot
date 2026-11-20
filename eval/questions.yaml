@@ -1,0 +1,108 @@
+# The 15 owner-approved evaluation questions. Do NOT edit questions to make them pass.
+# type: direct | multi | ambiguous | unanswerable (mix 8 / 3 / 2 / 2).
+# expected_sections: "DOC-ID §section" locations in data/docs that hold the answer.
+questions:
+  - id: Q1
+    type: direct
+    question: How often are A-class items cycle counted?
+    expected_docs: [WH-002]
+    expected_sections: ["WH-002 §2.2"]
+    expected_answer_points: ["A items are counted monthly (twelve times a year)"]
+  - id: Q2
+    type: direct
+    question: How soon after receipt must goods be put away?
+    expected_docs: [WH-001]
+    expected_sections: ["WH-001 §5.1"]
+    expected_answer_points: ["Within 4 hours of receipt"]
+  - id: Q3
+    type: direct
+    question: How long is an RMA number valid?
+    expected_docs: [WH-004]
+    expected_sections: ["WH-004 §2.2"]
+    expected_answer_points: ["30 days from the date of issue"]
+  - id: Q4
+    type: direct
+    question: What liability insurance must a new supplier carry?
+    expected_docs: [PR-002]
+    expected_sections: ["PR-002 §2.1", "PR-002 §2.2"]
+    expected_answer_points: ["General liability cover of at least $2M per occurrence"]
+  - id: Q5
+    type: direct
+    question: How long does a supplier have to respond to a SCAR?
+    expected_docs: [QA-001]
+    expected_sections: ["QA-001 §3.1"]
+    expected_answer_points: ["10 business days"]
+  - id: Q6
+    type: direct
+    question: What price variance is allowed in 3-way match?
+    expected_docs: [FIN-001]
+    expected_sections: ["FIN-001 §2.2"]
+    expected_answer_points: ["Within 2% or $50, whichever is lower"]
+  - id: Q7
+    type: direct
+    question: Who approves a $3,000 inventory write-off?
+    expected_docs: [WH-005]
+    expected_sections: ["WH-005 §2.1"]
+    expected_answer_points: ["Inventory Control Manager ($500 to $5,000 band)"]
+  - id: Q8
+    type: direct
+    question: What's the same-day ship cut-off for key accounts?
+    expected_docs: [CS-001]
+    expected_sections: ["CS-001 §3.1"]
+    expected_answer_points: ["3 pm local time on a working day"]
+  - id: Q9
+    type: multi
+    question: A supplier delivery arrives with damaged units. What steps and reports are required?
+    expected_docs: [WH-003, QA-001]
+    expected_sections: ["WH-003 §2.1", "WH-003 §2.2", "WH-003 §2.3", "WH-003 §5.1", "WH-003 §5.2", "QA-001 §2.1", "QA-001 §3.1"]
+    expected_answer_points:
+      - "Note the exception on the bill of lading before signing and photograph the damage"
+      - "Notify Procurement within 24 hours"
+      - "Quarantine the damaged goods in the OS&D lane"
+      - "An NCR is raised within 1 business day (QA-001)"
+  - id: Q10
+    type: multi
+    question: A cycle count shows a $7,000 shortage. What are the recount rules and who approves the adjustment?
+    expected_docs: [WH-002, WH-005]
+    expected_sections: ["WH-002 §4.1", "WH-002 §4.2", "WH-002 §4.3", "WH-005 §2.1", "WH-005 §2.2"]
+    expected_answer_points:
+      - "Variance outside 2% or $250 triggers a recount by a different counter"
+      - "If the two counts disagree the Inventory Control Manager supervises a third count"
+      - "Above $5,000 needs the Director of Operations plus Finance"
+  - id: Q11
+    type: multi
+    question: The invoice on a $30,000 PO is 5% over the PO price. What happens, and who approves a PO change?
+    expected_docs: [FIN-001, PR-001]
+    expected_sections: ["FIN-001 §2.2", "FIN-001 §3.1", "PR-001 §2.1", "PR-001 §4.1"]
+    expected_answer_points:
+      - "5% is outside the price tolerance (2% or $50, whichever is lower), so it is an exception"
+      - "The invoice is held and routed to the buyer"
+      - "A PO change is approved under PR-001 at the band of the new total (Director of Operations for $25,000 to $100,000)"
+  - id: Q12
+    type: ambiguous
+    question: What's the approval limit?
+    expected_docs: [PR-001, WH-005]
+    expected_sections: ["PR-001 §2.1", "WH-005 §2.1"]
+    expected_answer_points:
+      - "Labelled readings: If you mean PO approval, the PR-001 bands"
+      - "If you mean inventory adjustment approval, the WH-005 bands"
+  - id: Q13
+    type: ambiguous
+    question: How long do I have to report a problem?
+    expected_docs: [WH-003, QA-001]
+    expected_sections: ["WH-003 §2.3", "QA-001 §2.1"]
+    expected_answer_points:
+      - "Labelled readings: Procurement within 24 hours of receipt for OS&D exceptions (WH-003)"
+      - "An NCR within 1 business day of finding the nonconformance (QA-001)"
+  - id: Q14
+    type: unanswerable
+    question: How often must forklift operators be recertified?
+    expected_docs: []
+    expected_sections: []
+    expected_answer_points: ["Refuse: not covered by the corpus"]
+  - id: Q15
+    type: unanswerable
+    question: What's the current price of SKU 4471 from Granite Fasteners?
+    expected_docs: []
+    expected_sections: []
+    expected_answer_points: ["Refuse: no price data in the corpus"]

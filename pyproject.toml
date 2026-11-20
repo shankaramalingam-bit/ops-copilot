@@ -25,6 +25,9 @@ dev = [
     "mypy",
     "httpx",
     "types-PyYAML",
+    "nbconvert",
+    "ipykernel",
+    "nbformat",
 ]
 
 [build-system]

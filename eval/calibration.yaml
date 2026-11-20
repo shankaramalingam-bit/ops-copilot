@@ -1,0 +1,30 @@
+# Held-out set for gate-threshold calibration. NOT the 15 eval questions (no shared text).
+# Retrieval only: the maximum dense cosine similarity per question is recorded.
+answerable:
+  - {id: C1, question: "What happens to hazardous material once the receiving record is closed?", source: "WH-001 §6.1"}
+  - {id: C2, question: "Which dock door do hazmat loads go to?", source: "WH-001 §2.2"}
+  - {id: C3, question: "For how many years are receiving records retained?", source: "WH-001 §7.1"}
+  - {id: C4, question: "What variance can be accepted in a count without triggering a recount?", source: "WH-002 §4.1"}
+  - {id: C5, question: "What is the inventory accuracy target for counted locations?", source: "WH-002 §6.5"}
+  - {id: C6, question: "What is the deadline for filing a claim against the carrier?", source: "WH-003 §6.1"}
+  - {id: C7, question: "How big an overage may the buyer choose to receive?", source: "WH-003 §3.1"}
+  - {id: C8, question: "Is a restocking fee charged on a return that is not defective?", source: "WH-004 §5.1"}
+  - {id: C9, question: "Within how many days must a returned item be inspected?", source: "WH-004 §3.2"}
+  - {id: C10, question: "Which role signs off a purchase order worth $60,000?", source: "PR-001 §2.1"}
+  - {id: C11, question: "When is a sole-source justification form required?", source: "PR-001 §3.1"}
+  - {id: C12, question: "How many days does a new supplier stay on provisional status?", source: "PR-002 §3.1"}
+  - {id: C13, question: "How many NCRs in six months put a supplier on probation?", source: "QA-001 §4.1"}
+  - {id: C14, question: "What payment terms apply to supplier invoices by default?", source: "FIN-001 §4.1"}
+  - {id: C15, question: "How quickly must a Tier-1 customer's damage claim be acknowledged?", source: "CS-001 §4.1"}
+  - {id: C16, question: "What fill rate does Meridian target for its top accounts?", source: "CS-001 §3.2"}
+unanswerable:
+  - {id: U1, question: "How many days of paid time off do warehouse employees get each year?"}
+  - {id: U2, question: "How should a forklift battery be charged and swapped?"}
+  - {id: U3, question: "Which EDI message formats do suppliers use to send advance ship notices?"}
+  - {id: U4, question: "Where can employees park at the distribution centre?"}
+  - {id: U5, question: "What is the company holiday calendar for next year?"}
+  - {id: U6, question: "What is the unit price of SKU 8820 from Summit Packaging?"}
+  - {id: U7, question: "What is the safety stock level for item 3305?"}
+  - {id: U8, question: "What is the lunch break policy for dock staff?"}
+  - {id: U9, question: "What is the contracted freight rate on the Chicago lane?"}
+  - {id: U10, question: "How do I reset my warehouse system password?"}

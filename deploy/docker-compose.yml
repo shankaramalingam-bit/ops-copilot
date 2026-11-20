@@ -1,0 +1,32 @@
+# Run from the repository root:  docker compose -f deploy/docker-compose.yml up --build
+# There is NO authentication. The app port is published on the loopback interface only.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      - ollama
+    # Optional: put LLM_PROVIDER / OLLAMA_MODEL (and GROQ_API_KEY only for groq) in a .env file at
+    # the repository root. Never commit it. The file is not required.
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OPS_COPILOT_HOST: 0.0.0.0           # container-internal bind; the published port is loopback
+      OPS_COPILOT_ALLOW_NONLOCAL: "1"     # required for the non-loopback bind inside the container
+      OPS_COPILOT_ALLOWED_HOSTS: localhost,127.0.0.1
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_models:/root/.ollama
+    # No ports: only the app container reaches Ollama, over the compose network.
+    restart: unless-stopped
+
+volumes:
+  ollama_models:
