@@ -1,10 +1,10 @@
 {
-  "run_at": "2026-11-20T09:06:01+00:00",
+  "run_at": "2026-11-20T09:57:08+00:00",
   "model": "llama3.1:8b",
   "embed_model": "nomic-embed-text",
   "gate_threshold": 0.61,
   "metrics": {
-    "faithfulness": 0.631578947368421,
+    "faithfulness": 0.38095238095238093,
     "hit_at_4": 1.0,
     "mrr": 1.0,
     "citation_accuracy": 0.9166666666666666,
@@ -12,7 +12,7 @@
     "refusal_total": 2,
     "false_refusals": 1,
     "answer_rate": 0.9230769230769231,
-    "p95_latency_ms": 15877.0
+    "p95_latency_ms": 13808.5
   },
   "pass_bars": {
     "faithfulness": 0.9,
@@ -46,10 +46,10 @@
           "valid": true
         }
       ],
-      "faithfulness": 1.0,
-      "latency_ms": 10768.9,
-      "passed": true,
-      "notes": "ok"
+      "faithfulness": 0.0,
+      "latency_ms": 3362.2,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
     },
     {
       "id": "Q2",
@@ -76,7 +76,7 @@
         }
       ],
       "faithfulness": 1.0,
-      "latency_ms": 9563.1,
+      "latency_ms": 3649.6,
       "passed": true,
       "notes": "ok"
     },
@@ -104,10 +104,10 @@
           "valid": true
         }
       ],
-      "faithfulness": 1.0,
-      "latency_ms": 4148.0,
-      "passed": true,
-      "notes": "ok"
+      "faithfulness": 0.0,
+      "latency_ms": 3797.6,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
     },
     {
       "id": "Q4",
@@ -131,17 +131,12 @@
           "doc_id": "PR-002",
           "section": "2.2",
           "valid": true
-        },
-        {
-          "doc_id": "PR-002",
-          "section": "1.2",
-          "valid": true
         }
       ],
-      "faithfulness": 0.0,
-      "latency_ms": 4139.6,
-      "passed": false,
-      "notes": "unfaithful claim(s)"
+      "faithfulness": 1.0,
+      "latency_ms": 3922.5,
+      "passed": true,
+      "notes": "ok"
     },
     {
       "id": "Q5",
@@ -168,7 +163,7 @@
         }
       ],
       "faithfulness": 1.0,
-      "latency_ms": 4007.7,
+      "latency_ms": 4211.0,
       "passed": true,
       "notes": "ok"
     },
@@ -196,10 +191,10 @@
           "valid": true
         }
       ],
-      "faithfulness": 0.0,
-      "latency_ms": 4618.4,
-      "passed": false,
-      "notes": "unfaithful claim(s)"
+      "faithfulness": 1.0,
+      "latency_ms": 4426.7,
+      "passed": true,
+      "notes": "ok"
     },
     {
       "id": "Q7",
@@ -231,7 +226,7 @@
         }
       ],
       "faithfulness": 0.5,
-      "latency_ms": 6813.0,
+      "latency_ms": 6545.2,
       "passed": false,
       "notes": "unfaithful claim(s)"
     },
@@ -260,7 +255,7 @@
         }
       ],
       "faithfulness": 1.0,
-      "latency_ms": 4761.2,
+      "latency_ms": 4418.1,
       "passed": true,
       "notes": "ok"
     },
@@ -294,10 +289,10 @@
           "valid": true
         }
       ],
-      "faithfulness": 1.0,
-      "latency_ms": 10851.5,
+      "faithfulness": 0.25,
+      "latency_ms": 10423.2,
       "passed": false,
-      "notes": "citation not within expected docs; not all expected docs cited; not all expected docs in top-4"
+      "notes": "citation not within expected docs; unfaithful claim(s); not all expected docs cited; not all expected docs in top-4"
     },
     {
       "id": "Q10",
@@ -316,12 +311,12 @@
       "hit": true,
       "rr": 1.0,
       "refused": true,
-      "refusal_reason": "invalid_citation",
+      "refusal_reason": "model_refused",
       "citations": [],
       "faithfulness": null,
-      "latency_ms": 13147.1,
+      "latency_ms": 10428.5,
       "passed": false,
-      "notes": "false refusal: invalid_citation; not all expected docs in top-4"
+      "notes": "false refusal: model_refused; not all expected docs in top-4"
     },
     {
       "id": "Q11",
@@ -358,8 +353,8 @@
           "valid": true
         }
       ],
-      "faithfulness": 0.25,
-      "latency_ms": 15877.0,
+      "faithfulness": 0.0,
+      "latency_ms": 13808.5,
       "passed": false,
       "notes": "unfaithful claim(s)"
     },
@@ -383,15 +378,20 @@
       "refusal_reason": null,
       "citations": [
         {
+          "doc_id": "PR-001",
+          "section": "1.1",
+          "valid": true
+        },
+        {
           "doc_id": "WH-005",
           "section": "2.2",
           "valid": true
         }
       ],
       "faithfulness": 0.0,
-      "latency_ms": 4008.3,
+      "latency_ms": 6624.3,
       "passed": false,
-      "notes": "unfaithful claim(s); not all expected docs cited; no labelled readings"
+      "notes": "unfaithful claim(s)"
     },
     {
       "id": "Q13",
@@ -419,7 +419,7 @@
         }
       ],
       "faithfulness": 1.0,
-      "latency_ms": 4709.1,
+      "latency_ms": 3739.5,
       "passed": false,
       "notes": "not all expected docs cited; no labelled readings; not all expected docs in top-4"
     },
@@ -440,7 +440,7 @@
       "refusal_reason": "below_gate",
       "citations": [],
       "faithfulness": null,
-      "latency_ms": 64.5,
+      "latency_ms": 65.0,
       "passed": true,
       "notes": "correctly refused (below_gate)"
     },
@@ -461,7 +461,7 @@
       "refusal_reason": "below_gate",
       "citations": [],
       "faithfulness": null,
-      "latency_ms": 21.5,
+      "latency_ms": 18.2,
       "passed": true,
       "notes": "correctly refused (below_gate)"
     }
