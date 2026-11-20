@@ -4,7 +4,7 @@ Ops Copilot answers questions about Meridian Supply Co.'s (fictional) warehouse 
 
 ## Status
 
-**Phase 1: working prototype, eval bars not all met.** The 15-question eval passes 3 of 5 KPIs and **fails 2**: faithfulness (0.632 vs 0.90) and p95 latency (15.9 s vs 8 s). Retrieval and refusal are solid; answer quality on multi-document and ambiguous questions is not. Nothing was loosened to pass. Details: [eval/report.md](eval/report.md).
+**Phase 1: working prototype, eval bars not all met.** The official 15-question eval (2026-11-20, code `6e2718f`, nonce-hardened judge prompt) passes 3 of 5 KPIs and **fails 2**: faithfulness (0.381 vs 0.90, FAIL) and p95 latency (13.8 s vs 8 s, FAIL). Retrieval (hit@4 1.0, MRR 1.0) and refusal (2/2) pass; 7 of 15 questions pass; answer quality on multi-document and ambiguous questions is weak. Nothing was loosened to pass. Details: [eval/report.md](eval/report.md).
 
 ## Setup
 
@@ -76,23 +76,23 @@ flowchart LR
 
 ## Latest eval
 
-Run 2026-11-20, `llama3.1:8b` (generator and judge), `nomic-embed-text`, hybrid top-4, gate 0.61. Source: `eval/latest.json`; full report with per-question results and failure analysis: [eval/report.md](eval/report.md).
+Official run 2026-11-20T09:57:08Z on commit `6e2718f`, `llama3.1:8b` (generator and judge, hardened judge prompt), `nomic-embed-text`, hybrid top-4, gate 0.61. Source: `eval/latest.json`; full report with per-question results and failure analysis: [eval/report.md](eval/report.md).
 
 | KPI | Result | Bar | Status |
 |---|---|---|---|
-| Faithfulness | 0.632 | >= 0.90 | **FAIL** |
+| Faithfulness | 0.381 (8/21 claims) | >= 0.90 | **FAIL** |
 | hit@4 | 1.000 | >= 0.85 | PASS |
 | MRR | 1.000 | >= 0.70 | PASS |
 | Refusal correct | 2/2 | 2/2 | PASS |
-| p95 latency | 15,877 ms | < 8,000 ms | **FAIL** |
+| p95 latency | 13,808.5 ms | < 8,000 ms | **FAIL** |
 
-Questions passed: 7 of 15.
+Questions passed: 7 of 15. Also: citation accuracy 0.917, answer rate 0.923, false refusals 1 (Q10, model refused). The faithfulness drop from the earlier 0.632 is explained in [eval/report.md](eval/report.md): same-model judge, changed judge prompt and run-to-run nondeterminism, not separable from the records.
 
 ## Known limitations
 
-- **Stale faithfulness figure**: the recorded faithfulness (0.632) predates the nonce-hardened judge prompt; the official re-run will replace it in `eval/report.md`.
-- **Same-model judge**: the faithfulness judge is the same 8B model as the generator and showed both a false negative and a false positive. Treat faithfulness as a smoke signal.
-- **8B latency**: a local 8B model takes 4 to 16 s per answered question; multi-document questions set the p95.
+- **Official run on the hardened judge prompt**: the figures above come from the single official run with the nonce-hardened judge prompt; there is no second run to show the spread.
+- **Same-model judge**: the faithfulness judge is the same 8B model as the generator; in the official run it gave false negatives on claims that match the corpus word for word (for example Q1, Q3) and a lenient pass on a garbled answer (Q6). Treat faithfulness as a smoke signal.
+- **8B latency**: a local 8B model takes about 3 to 14 s per answered question; multi-document questions set the p95.
 - **Validator false refusals**: the citation validator can refuse a correct answer, for example when it mentions a token like `PO-2291` or `COVID-19`, uses a citation form outside the grammar (ranges, "Section n"), uses non-ASCII symbols, or cites a section that was not retrieved. The full list is in [eval/report.md](eval/report.md).
 - Multi-document and ambiguous questions are often answered incompletely; the gate threshold margin is thin (one unanswerable question cannot be separated from the answerable ones).
 - Single eval run; local Ollama at temperature 0 is not guaranteed deterministic.

@@ -140,29 +140,93 @@ def test_app_renders_refusal_constant_not_server_answer() -> None:
     assert "multiline(refused ? H.REFUSAL_TEXT : res.answer)" in js
 
 
-def test_eval_summary_reads_real_latest_json() -> None:
-    expr = (
-        f"H.evalSummary(JSON.parse(require('fs').readFileSync({json.dumps(str(LATEST))},'utf8')))"
-    )
+def _js_summary(path: Path) -> dict:
+    expr = f"H.evalSummary(JSON.parse(require('fs').readFileSync({json.dumps(str(path))},'utf8')))"
     s = run_js(expr)
     assert isinstance(s, dict)
-    k = s["kpis"]
-    assert k["faithfulness"]["value"] == pytest.approx(0.632, abs=5e-4)
-    assert k["faithfulness"]["text"] == "0.63" and k["faithfulness"]["verdict"] == "fail"
-    assert k["hit4"]["value"] == 1.0 and k["hit4"]["verdict"] == "pass"
-    assert k["mrr"]["value"] == 1.0 and k["mrr"]["verdict"] == "pass"
-    assert k["refusal"]["text"] == "2 / 2" and k["refusal"]["verdict"] == "pass"
-    assert k["p95"]["seconds"] == pytest.approx(15.877) and k["p95"]["verdict"] == "fail"
-    assert k["p95"]["text"] == "15.9 s"
-    assert len(s["rows"]) == 15
-    assert s["rows"][0]["id"] == "Q1"
+    return s
+
+
+def _verdict(ok: bool) -> str:
+    return "pass" if ok else "fail"
+
+
+def _assert_summary_matches(s: dict, d: dict) -> None:
+    """Expected values computed in Python from the file's own metrics and pass_bars."""
+    m, bars, k = d["metrics"], d["pass_bars"], s["kpis"]
+    for key, mkey, bkey in (
+        ("faithfulness", "faithfulness", "faithfulness"),
+        ("hit4", "hit_at_4", "hit_at_4"),
+        ("mrr", "mrr", "mrr"),
+    ):
+        assert k[key]["value"] == pytest.approx(m[mkey])
+        assert k[key]["text"] == f"{m[mkey]:.2f}"
+        assert k[key]["verdict"] == _verdict(m[mkey] >= bars[bkey])
+    assert k["refusal"]["text"] == f"{m['refusal_correct']} / {m['refusal_total']}"
+    ref_ok = m["refusal_correct"] >= bars["refusal_correct"]
+    ref_all = m["refusal_correct"] >= m["refusal_total"]
+    assert k["refusal"]["verdict"] == _verdict(ref_ok and ref_all)
+    p95_s = m["p95_latency_ms"] / 1000
+    assert k["p95"]["seconds"] == pytest.approx(p95_s)
+    assert k["p95"]["text"] == f"{p95_s:.1f} s"
+    assert k["p95"]["verdict"] == _verdict(m["p95_latency_ms"] < bars["p95_latency_ms"])
+    assert [r["id"] for r in s["rows"]] == [q["id"] for q in d["questions"]]
+
+
+def test_eval_summary_reads_real_latest_json() -> None:
+    d = json.loads(LATEST.read_text(encoding="utf-8"))
+    s = _js_summary(LATEST)
+    _assert_summary_matches(s, d)
+    assert len(s["rows"]) == 15 and s["rows"][0]["id"] == "Q1"
 
 
 def test_eval_summary_matches_committed_file_values() -> None:
+    """JS output equals values derived in Python from the committed file (no hard-coded run)."""
     d = json.loads(LATEST.read_text(encoding="utf-8"))
+    assert len(d["questions"]) == 15
+    for key in ("faithfulness", "hit_at_4", "mrr", "refusal_correct", "p95_latency_ms"):
+        assert key in d["metrics"] and key in d["pass_bars"]
+    s = _js_summary(LATEST)
+    _assert_summary_matches(s, d)
     m = d["metrics"]
-    assert (round(m["faithfulness"], 3), m["hit_at_4"], m["mrr"]) == (0.632, 1.0, 1.0)
-    assert (m["refusal_correct"], m["refusal_total"], m["p95_latency_ms"]) == (2, 2, 15877.0)
+    assert s["kpis"]["p95"]["seconds"] == pytest.approx(m["p95_latency_ms"] / 1000)
+    assert s["kpis"]["refusal"]["text"] == f"{m['refusal_correct']} / {m['refusal_total']}"
+
+
+def test_eval_summary_fixture_with_known_numbers(tmp_path: Path) -> None:
+    """Hand-written metrics with exact expected outputs: JS logic checked against known numbers."""
+    fixture: dict = {
+        "metrics": {
+            "faithfulness": 0.9,
+            "hit_at_4": 0.8,
+            "mrr": 0.7,
+            "refusal_correct": 2,
+            "refusal_total": 2,
+            "p95_latency_ms": 7999.0,
+        },
+        "questions": [{"id": "A1"}, {"id": "A2"}, {"id": "A3"}],
+    }
+    f = tmp_path / "latest.json"
+    f.write_text(json.dumps(fixture), encoding="utf-8")
+    s = _js_summary(f)
+    k = s["kpis"]
+    assert (k["faithfulness"]["text"], k["faithfulness"]["verdict"]) == ("0.90", "pass")
+    assert (k["hit4"]["text"], k["hit4"]["verdict"]) == ("0.80", "fail")
+    assert (k["mrr"]["text"], k["mrr"]["verdict"]) == ("0.70", "pass")
+    assert (k["refusal"]["text"], k["refusal"]["verdict"]) == ("2 / 2", "pass")
+    assert k["p95"]["seconds"] == pytest.approx(7.999)
+    assert (k["p95"]["text"], k["p95"]["verdict"]) == ("8.0 s", "pass")
+    assert [r["id"] for r in s["rows"]] == ["A1", "A2", "A3"]
+
+    fixture["metrics"].update(
+        faithfulness=0.381, hit_at_4=1.0, mrr=1.0, refusal_correct=1, p95_latency_ms=13808.5
+    )
+    f.write_text(json.dumps(fixture), encoding="utf-8")
+    k = _js_summary(f)["kpis"]
+    assert (k["faithfulness"]["text"], k["faithfulness"]["verdict"]) == ("0.38", "fail")
+    assert (k["hit4"]["text"], k["hit4"]["verdict"]) == ("1.00", "pass")
+    assert (k["refusal"]["text"], k["refusal"]["verdict"]) == ("1 / 2", "fail")
+    assert (k["p95"]["text"], k["p95"]["verdict"]) == ("13.8 s", "fail")
 
 
 def test_eval_summary_edge_cases() -> None:
