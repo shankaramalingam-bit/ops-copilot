@@ -1193,3 +1193,123 @@ def test_a31_r3_env_path_names_classified_path_only() -> None:
         "plain:sub/.env.example",
         "plain:x.env",
     ]
+
+
+# ---------------------------------------------------------------- unit H-sec (S1, S2)
+def hs_shim(tmp: Path) -> tuple[dict[str, str], Path, Path]:
+    """PATH shim: logs every git argv; for hash-object also tees the stdin (the path list)."""
+    real = shutil.which("git")
+    bindir = tmp / "hshim"
+    bindir.mkdir()
+    calls, stdin_log = tmp / "hcalls.log", tmp / "hstdin.log"
+    (bindir / "git").write_text(
+        "#!/bin/bash\n"
+        f'echo "git $*" >> "{calls}"\n'
+        'if [ "$1" = hash-object ]; then\n'
+        f'  tee -a "{stdin_log}" | "{real}" "$@"\n'
+        "  exit ${PIPESTATUS[1]}\n"
+        "fi\n"
+        f'exec "{real}" "$@"\n'
+    )
+    (bindir / "git").chmod(0o755)
+    return {"PATH": f"{bindir}:{os.environ['PATH']}"}, calls, stdin_log
+
+
+def decoy_setup(repo: Path, index_name: str, decoy: str) -> str:
+    """Index holds a secret blob under `index_name`; the working tree has a CLEAN file of that
+    exact name plus an ignored `decoy` carrying the same secret (what hash-object would open
+    if it mangled the name). Returns the secret."""
+    secret = FAKES["ghp"]() + "\n"
+    track(repo, index_name, secret)
+    (repo / index_name).write_text("clean\n")
+    (repo / decoy).write_text(secret)
+    (repo / ".gitignore").write_text(decoy + "\n")
+    return secret.strip()
+
+
+def test_hsec_s1_quoted_index_name_scans_index_blob(repo: Path, tmp_path: Path) -> None:
+    secret = decoy_setup(repo, '"x.txt"', "x.txt")
+    extra, calls, stdin_log = hs_shim(tmp_path)
+    res = run_env(repo, extra)
+    assert_red(res, "x.txt", secret)
+    assert not stdin_log.exists() or '"' not in stdin_log.read_text()
+
+
+def test_hsec_s1_cr_suffixed_name_scans_index_blob(repo: Path, tmp_path: Path) -> None:
+    secret = decoy_setup(repo, "y.txt\r", "y.txt")
+    extra, calls, stdin_log = hs_shim(tmp_path)
+    res = run_env(repo, extra)
+    assert_red(res, "y.txt", secret)
+    assert not stdin_log.exists() or "\r" not in stdin_log.read_text()
+
+
+@pytest.mark.parametrize("name", ["b\\s.txt", " lead.txt", "trail.txt ", "café.txt"])
+def test_hsec_s1_unusual_names_never_hashed(repo: Path, tmp_path: Path, name: str) -> None:
+    track(repo, name, "plain\n")
+    (repo / name).write_text("plain\n")
+    track(repo, "ok-plain.txt", "plain two\n")
+    (repo / "ok-plain.txt").write_text("plain two\n")
+    extra, calls, stdin_log = hs_shim(tmp_path)
+    res = run_env(repo, extra)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    logged = stdin_log.read_text().splitlines()
+    assert "ok-plain.txt" in logged, "positive control: hash-object saw the plain path"
+    assert name not in logged
+
+
+def test_hsec_s1_hash_object_never_given_quote_path(repo: Path, tmp_path: Path) -> None:
+    """A name that C-unquotes to the protected .env.local must never reach hash-object."""
+    protected = ".env" + ".local"
+    track(repo, '"' + protected + '"', "plain\n")
+    track(repo, "ok-plain.txt", "plain two\n")
+    (repo / "ok-plain.txt").write_text("plain two\n")
+    extra, calls, stdin_log = hs_shim(tmp_path)
+    res = run_env(repo, extra)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    seen = stdin_log.read_text()
+    assert "ok-plain.txt" in seen, "positive control"
+    assert '"' not in seen and protected not in seen
+
+
+def test_hsec_s1_identical_clean_blob_is_skipped(repo: Path, tmp_path: Path) -> None:
+    """Functional guard for the skip itself (not only the perf test): the blob of a file that
+    equals its index copy is never cat-file'd; one that differs on disk is (positive control)."""
+    (repo / "same.txt").write_text("identical unique content\n")
+    (repo / "diff.txt").write_text("staged version\n")
+    git(repo, "add", "-A")
+    (repo / "diff.txt").write_text("edited on disk\n")
+    same = git(repo, "ls-files", "-s", "--", "same.txt").split()[1]
+    diff = git(repo, "ls-files", "-s", "--", "diff.txt").split()[1]
+    extra, calls, _ = hs_shim(tmp_path)
+    res = run_env(repo, extra)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    log = calls.read_text()
+    assert f"cat-file blob {diff}" in log, "positive control: differing blob is read"
+    assert f"cat-file blob {same}" not in log, "identical blob was not skipped"
+
+
+def test_hsec_s2_history_record_prints_unquoted_path(repo: Path) -> None:
+    secret = FAKES["ghp"]()
+    (repo / "café.txt").write_text(secret + "\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add")
+    git(repo, "rm", "-q", "-f", "--cached", "café.txt")
+    (repo / "café.txt").unlink()
+    git(repo, "commit", "-qm", "rm")
+    res = run(repo, "--history")
+    assert res.returncode == 1
+    assert "café.txt" in res.stderr, res.stderr
+    assert "diff --git" not in res.stderr and "\\303" not in res.stderr and 'b/"' not in res.stderr
+    assert secret not in res.stdout + res.stderr
+
+
+def test_hsec_s2_history_record_quote_in_name(repo: Path) -> None:
+    secret = FAKES["ghp"]()
+    (repo / 'a"b.txt').write_text(secret + "\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "add")
+    res = run(repo, "--history")
+    assert res.returncode == 1
+    assert 'a"b.txt' in res.stderr, res.stderr
+    assert "diff --git" not in res.stderr and '\\"' not in res.stderr
+    assert secret not in res.stdout + res.stderr

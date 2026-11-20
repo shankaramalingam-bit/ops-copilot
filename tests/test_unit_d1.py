@@ -78,7 +78,7 @@ def test_slot_released_only_when_worker_finishes():
 
     poller = threading.Thread(target=poll_docs)
     poller.start()
-    for _ in range(5):  # 5 waves of 2, each wave after the previous one's deadline expired
+    for _ in range(3):  # 3 waves of 2, each wave after the previous one's deadline expired
         wave = [threading.Thread(target=one) for _ in range(2)]
         for t in wave:
             t.start()
@@ -88,9 +88,12 @@ def test_slot_released_only_when_worker_finishes():
     stop.set()
     poller.join()
     time.sleep(1.7)  # let the stragglers finish before reading the peak
-    assert len(codes) == 10
+    assert len(codes) == 6
     assert peak[0] <= 2, peak
-    assert set(codes) <= {503, 504}
+    # wave 1 got the slots and timed out; the workers (1.5 s) still hold them, so every later
+    # wave must be 503 busy. Releasing the slot on the timeout path would give 504 again.
+    assert codes[:2] == [504, 504], codes
+    assert codes[2:] == [503] * 4, codes
     assert docs_ms and max(docs_ms) < 1000  # GET endpoints are not starved
 
 
@@ -333,3 +336,24 @@ def test_pipeline_passes_normalised_question_to_retrieve(make_pipeline, monkeypa
     monkeypatch.setattr(pipeline_mod, "retrieve", spy)
     pipe.ask("Who approves\x00 a stan​dard purchase order?")
     assert seen == ["Who approves a standard purchase order?"]
+
+
+def test_generic_500_path_does_not_log_or_return_exception_message(caplog, tmp_path):
+    class Boom(Exception):
+        pass
+
+    # web_dir without index.html: no static mount at "/" shadowing the extra route
+    app = create_app(Echo(), web_dir=tmp_path)  # type: ignore[arg-type]
+
+    @app.get("/api/boom")
+    async def boom():
+        raise Boom("detail " + CANARY)
+
+    caplog.set_level(logging.DEBUG)
+    with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as c:
+        r = c.get("/api/boom")
+    assert r.status_code == 500
+    assert r.json() == {"detail": "internal error"}
+    assert CANARY not in r.text
+    assert CANARY not in caplog.text
+    assert any("unhandled error: Boom" in m for m in caplog.messages), "positive control"

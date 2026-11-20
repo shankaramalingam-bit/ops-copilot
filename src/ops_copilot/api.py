@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -111,15 +112,25 @@ def _bare_host(host: str) -> str:
 def allowed_hosts_from_env(extra: Iterable[str] = ()) -> frozenset[str]:
     names = [*LOOPBACK_HOSTS, *extra]
     names += os.environ.get("OPS_COPILOT_ALLOWED_HOSTS", "").split(",")
-    return frozenset(_bare_host(n) for n in names if n.strip())
+    bare = (_bare_host(n) for n in names)
+    return frozenset(b for b in bare if b)  # filtered AFTER bracket-stripping: "[]" adds nothing
+
+
+_HOST_RE = re.compile(r"(?:\[([^\[\]\s:]*:[^\[\]\s]*)\]|([^\[\]\s:]+))(?::([0-9]{1,5}))?", re.ASCII)
 
 
 def _host_of_header(value: str) -> str:
-    """Host header -> bare lowercase hostname (port stripped; IPv6 brackets handled)."""
-    v = value.strip().lower()
-    if v.startswith("["):
-        return v[1 : v.find("]")] if "]" in v else ""
-    return v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+    """Host header -> bare lowercase hostname, or "" if malformed.
+
+    Strict: a name or a bracketed IPv6 literal, then optionally `:<1-5 ASCII digits <= 65535>`.
+    Anything after the name or `]` other than that is malformed.
+    """
+    m = _HOST_RE.fullmatch(value.strip().lower())
+    if m is None:
+        return ""
+    if m.group(3) is not None and int(m.group(3)) > 65535:
+        return ""
+    return m.group(1) or m.group(2) or ""
 
 
 def _origin_allowed(origin: str, hosts: frozenset[str]) -> bool:
@@ -163,12 +174,16 @@ class HardeningMiddleware:
         async def reply(status: int, detail: str) -> None:
             await _err(status, detail)(scope, receive, send_wrapped)
 
-        hdrs = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
-        if _host_of_header(hdrs.get("host", "")) not in self.hosts:
+        raw = [(k.decode("latin-1").lower(), v.decode("latin-1")) for k, v in scope["headers"]]
+        hdrs = dict(raw)
+        host = _host_of_header(hdrs.get("host", ""))
+        if sum(k == "host" for k, _ in raw) > 1 or not host or host not in self.hosts:
             await reply(400, "invalid host")
             return
         origin = hdrs.get("origin")
-        if origin is not None and not _origin_allowed(origin, self.hosts):
+        if sum(k == "origin" for k, _ in raw) > 1 or (
+            origin is not None and not _origin_allowed(origin, self.hosts)
+        ):
             await reply(403, "forbidden")
             return
         try:
