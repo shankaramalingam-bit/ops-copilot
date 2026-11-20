@@ -16,8 +16,16 @@
 # `.envrc`, `.env-notes.md`, `.environment`, files under a `.env/` dir are scanned normally.
 # EVERY `.env.example` (any depth) is content-scanned (all patterns) and must be well formed:
 # lines are NAME=VALUE (NAME matches [A-Za-z_][A-Za-z0-9_]*, optional `export `), values of
-# KEY/TOKEN/SECRET/PASSWORD-named variables must be empty. Where one cannot be read (agent
-# sandbox) a skip line naming the path is printed; its index/history copies are still scanned.
+# KEY/TOKEN/SECRET/PASSWORD-named variables must be empty.
+# Protected-path rule (a.2.1): `.env*` content is read ONLY where the filesystem permits it.
+# env_readable(path) = regular file in the working tree, not a symlink, and a 1-byte read works.
+#   * CI: every .env.example is readable, so there is no protected path and content is ALWAYS
+#     scanned (working tree, index blob, history, tag-only blobs, strict format check).
+#   * Agent sandbox: for each .env.example that is NOT readable the content is read from NO
+#     source: it is skipped by exact path in the index scan, excluded from `git log -p`
+#     (:(exclude,literal)<path>), skipped in the tag-only blob scan (blobs named by that path) and
+#     in the strict-format check. `skipped content scan of <path> (protected path; checked in CI)`
+#     is printed. Path-only checks (tracked .env, history paths, symlinks) run everywhere.
 # Symlinks are never followed. A symlink to a .env* target (other than .env.example) fails.
 # Read and enumeration errors fail CLOSED.
 #
@@ -65,6 +73,37 @@ is_env_path() {
   [[ $b =~ $ENV_RE ]] && [ "$b" != "$EX_NAME" ]
 }
 is_example() { [ "${1##*/}" = "$EX_NAME" ]; }
+
+# env_readable <path>: working-tree regular file (not a symlink) whose first byte can be read.
+env_readable() {
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -r "$1" ] && head -c 1 -- "$1" >/dev/null 2>&1
+}
+# PROT: .env.example paths (exact, repo-relative) that are not readable here; computed once.
+PROT=()
+compute_prot() {
+  local f
+  PROT=()
+  git ls-files -z >"$TMPD/p_tracked" 2>/dev/null || true
+  git ls-files -z --others --exclude-standard >"$TMPD/p_others" 2>/dev/null || true
+  while IFS= read -r -d '' f; do
+    if is_example "$f" && ! env_readable "$f"; then PROT+=("$f"); fi
+  done < <(cat "$TMPD/p_tracked" "$TMPD/p_others" | sort -zu)
+}
+# is_prot <path>: exact match against PROT.
+is_prot() {
+  local x
+  [ "${#PROT[@]}" -gt 0 ] || return 1
+  for x in "${PROT[@]}"; do [ "$x" = "$1" ] && return 0; done
+  return 1
+}
+# print_skips: one stdout line per protected path.
+print_skips() {
+  local x
+  [ "${#PROT[@]}" -gt 0 ] || return 0
+  for x in "${PROT[@]}"; do
+    echo "gate_secrets: skipped content scan of $(rp "$x") (protected path; checked in CI)"
+  done
+}
 # is_env_target <link-target>: same definition applied to a symlink target.
 is_env_target() {
   local t="$1"
@@ -130,6 +169,13 @@ scan_files() {
     if is_env_path "$f"; then continue; fi # protected path, never read
     ex=0
     if is_example "$f"; then ex=1; fi
+    if is_prot "$f"; then # content never read from a protected path (symlink check is path-only)
+      if [ -L "$f" ]; then
+        t="$(readlink "$f" || true)"
+        if is_env_target "$t"; then echo "S|$(rp "$f")"; fi
+      fi
+      continue
+    fi
     if [ -L "$f" ]; then
       t="$(readlink "$f" || true)"
       if is_env_target "$t"; then echo "S|$(rp "$f")"; elif [ "$ex" = 1 ]; then echo "K|$(rp "$f")"; fi
@@ -167,6 +213,7 @@ index_scan() {
       continue
     fi
     if is_env_path "$path"; then continue; fi
+    if is_prot "$path"; then continue; fi # protected: index blob not read
     ex=0
     if is_example "$path"; then ex=1; fi
     if ! git cat-file blob "$sha" >"$blob" 2>/dev/null </dev/null || ! lines="$(scan_lines "$blob")"; then
@@ -202,8 +249,13 @@ history_scan() {
   local c f rc sha path line blob="$TMPD/hblob"
 
   # 1. added lines of every commit (binaries as text, merges against the first parent).
+  local pathspec=() x
+  if [ "${#PROT[@]}" -gt 0 ]; then
+    pathspec=(--full-history -- .)
+    for x in "${PROT[@]}"; do pathspec+=(":(exclude,literal)$x"); done
+  fi
   if git log -p --text --all --no-color --no-ext-diff --no-textconv --diff-merges=first-parent \
-    --format='commit %H' >"$TMPD/hist" 2>/dev/null; then
+    --format='commit %H' "${pathspec[@]+"${pathspec[@]}"}" >"$TMPD/hist" 2>/dev/null; then
     { grep -aE -e "^(commit [0-9a-f]+|diff --git .*|@@ .*|\\+.*$VENDOR.*)$" "$TMPD/hist" || true; } |
       awk -v re="$ENV_RE" '
         /^commit [0-9a-f]+$/ { c = substr($2, 1, 12); next }
@@ -259,6 +311,7 @@ history_scan() {
       if [ "$line" != "$sha" ]; then path="${line#* }"; fi
       [ "$(git cat-file -t "$sha" 2>/dev/null </dev/null)" = blob ] || continue
       if [ -n "$path" ] && is_env_path "$path"; then continue; fi
+      if [ -n "$path" ] && is_prot "$path"; then continue; fi # protected: blob not read
       if ! git cat-file blob "$sha" >"$blob" 2>/dev/null </dev/null; then echo "E|(blob ${sha:0:12})"; continue; fi
       rc=0
       grep -aqE -e "$VENDOR" "$blob" 2>/dev/null || rc=$?
@@ -379,8 +432,10 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 if [ "${1:-}" = "--history" ]; then
+  compute_prot
   recs="$(history_scan | sort -u)"
   report "gate_secrets --history" "$recs"
+  print_skips
   if [ "$fail" -ne 0 ]; then exit 1; fi
   echo "gate_secrets --history: OK"
   exit 0
@@ -391,6 +446,7 @@ if [ -n "${1:-}" ]; then
   exit 2
 fi
 
+compute_prot
 # Enumerate files; any error (even a warning on stderr) fails closed.
 enum_fail=0
 if ! git ls-files -z >"$TMPD/tracked" 2>"$TMPD/e1" || [ -s "$TMPD/e1" ]; then enum_fail=1; fi
@@ -411,8 +467,9 @@ records="$(
 report "gate_secrets" "$records"
 
 # Stdout notes: .env.example skips and successful checks.
-while IFS= read -r p; do
-  [ -z "$p" ] || echo "gate_secrets: skipped content scan of $p (not readable here, symlink or not a regular file; owner-verified; index copy still scanned)"
+print_skips
+while IFS= read -r p; do # fallback: became unreadable after the up-front check (race)
+  [ -z "$p" ] || echo "gate_secrets: skipped content scan of $p (protected path; checked in CI)"
 done <<<"$(printf '%s\n' "$records" | sed -n 's/^K|//p')"
 if [ "$fail" -eq 0 ]; then
   while IFS= read -r p; do

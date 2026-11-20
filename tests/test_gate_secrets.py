@@ -379,6 +379,8 @@ def test_h2_env_example_vendor_pattern_nested(repo: Path) -> None:
 def test_h2_env_example_vendor_pattern_nested_tracked(repo: Path) -> None:
     secret = FAKES["groq"]()
     track(repo, "a/b/" + ENV_EXAMPLE, "NOTE=" + secret + "\n")
+    (repo / "a" / "b").mkdir(parents=True)  # readable on disk (clean): the index copy is scanned
+    (repo / "a" / "b" / ENV_EXAMPLE).write_text("A=1\n")
     assert_red(run(repo), "a/b/" + ENV_EXAMPLE + ":1", secret)
 
 
@@ -488,7 +490,7 @@ def test_m4_keyshaped_name_redacted(repo: Path) -> None:
 
 def test_m4_index_copy_checked_when_disk_differs(repo: Path) -> None:
     secret = "v" + "alue123"
-    track(repo, ENV_EXAMPLE, "OPENAI_API_" + "KEY=" + secret + "\n")
+    track(repo, ENV_EXAMPLE, "OPENAI_API_" + "KEY=" + secret + "\n")  # disk copy stays clean
     assert_red(run(repo), "OPENAI_API_KEY", secret)
 
 
@@ -610,3 +612,168 @@ def test_new_patterns_in_history_binary(repo: Path, kind: str) -> None:
     git(repo, "rm", "-q", "b.bin")
     git(repo, "commit", "-qm", "c")
     assert_red(run(repo, "--history"), ":b.bin", secret)
+
+
+# ---- a.2.1: never read .env* content via git objects where the filesystem denies it
+SKIP = "(protected path; checked in CI)"
+
+
+def plant(repo: Path, rel: str = ENV_EXAMPLE, kind: str = "groq") -> tuple[str, str]:
+    """Commit a planted key at `rel`; return (secret, blob sha)."""
+    secret = FAKES[kind]()
+    f = repo / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("NOTE=" + secret + "\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "plant")
+    return secret, git(repo, "rev-parse", "HEAD:" + rel)
+
+
+def deny(repo: Path, rel: str, how: str) -> None:
+    f = repo / rel
+    if how == "chmod":
+        f.chmod(0)
+    else:
+        f.unlink()
+        f.mkdir()
+
+
+def undeny(repo: Path, rel: str, how: str) -> None:
+    f = repo / rel
+    if how == "chmod":
+        f.chmod(0o644)
+
+
+def git_shim(tmp: Path) -> tuple[dict[str, str], Path]:
+    """PATH shim that logs every git argv (one line per call) then execs the real git."""
+    real = shutil.which("git")
+    log = tmp / "git_calls.log"
+    bindir = tmp / "shim"
+    bindir.mkdir()
+    shim = bindir / "git"
+    shim.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >>"{log}"\nexec "{real}" "$@"\n')
+    shim.chmod(0o755)
+    return {"PATH": f"{bindir}:{os.environ['PATH']}"}, log
+
+
+def run_env(repo: Path, extra: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    env = {
+        **os.environ,
+        **extra,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+    }
+    return subprocess.run(
+        ["bash", str(SCRIPT), *args], cwd=repo, env=env, capture_output=True, text=True, check=False
+    )
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+@pytest.mark.parametrize("how", ["chmod", "dir"])
+def test_a21_unreadable_example_index_not_read(repo: Path, tmp_path: Path, how: str) -> None:
+    secret, blob = plant(repo)
+    deny(repo, ENV_EXAMPLE, how)
+    extra, log = git_shim(tmp_path)
+    try:
+        res = run_env(repo, extra)
+    finally:
+        undeny(repo, ENV_EXAMPLE, how)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
+    assert secret not in res.stdout + res.stderr
+    calls = log.read_text()
+    assert "ls-files" in calls, "positive control: the shim sees the gate's git calls"
+    assert blob not in calls, "gate asked git for the protected blob"
+    assert "checked (strict format" not in res.stdout
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+@pytest.mark.parametrize("how", ["chmod", "dir"])
+def test_a21_unreadable_example_history_not_read(repo: Path, tmp_path: Path, how: str) -> None:
+    secret, blob = plant(repo)
+    (repo / ENV_EXAMPLE).write_text("A=1\n")
+    git(repo, "commit", "-qam", "clean")
+    deny(repo, ENV_EXAMPLE, how)
+    extra, log = git_shim(tmp_path)
+    try:
+        res = run_env(repo, extra, "--history")
+    finally:
+        undeny(repo, ENV_EXAMPLE, how)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
+    assert secret not in res.stdout + res.stderr
+    logs = [ln for ln in log.read_text().splitlines() if ln.startswith("log ") and " -p " in ln]
+    assert logs, "positive control: the content-reading git log was run"
+    assert all("exclude" in ln for ln in logs), logs
+    assert blob not in log.read_text()
+
+
+def test_a21_readable_example_still_scanned(repo: Path) -> None:
+    """CI behaviour: readable file -> planted key flagged in worktree, index and history."""
+    secret, _ = plant(repo)
+    res = run(repo)
+    assert_red(res, ENV_EXAMPLE + ":1", secret)
+    assert "skipped content scan" not in res.stdout
+    (repo / ENV_EXAMPLE).write_text("A=1\n")
+    git(repo, "commit", "-qam", "clean")
+    assert_red(run(repo, "--history"), ENV_EXAMPLE, secret)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a21_mixed_only_unreadable_path_excluded(repo: Path) -> None:
+    """One nested unreadable example is skipped; the readable root one is still scanned."""
+    s_nested, _ = plant(repo, "svc/" + ENV_EXAMPLE, "groq")
+    s_root = FAKES["hf"]()
+    (repo / ENV_EXAMPLE).write_text("NOTE=" + s_root + "\n")
+    deny(repo, "svc/" + ENV_EXAMPLE, "chmod")
+    try:
+        res = run(repo)
+    finally:
+        undeny(repo, "svc/" + ENV_EXAMPLE, "chmod")
+    assert_red(res, ENV_EXAMPLE + ":1", s_root)
+    assert "svc/" + ENV_EXAMPLE + ":1" not in res.stderr
+    assert f"skipped content scan of svc/{ENV_EXAMPLE} {SKIP}" in res.stdout
+    assert s_nested not in res.stdout + res.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a21_other_checks_still_run_when_skipping(repo: Path) -> None:
+    plant(repo)
+    deny(repo, ENV_EXAMPLE, "chmod")
+    track(repo, ".env" + ".local", "X=1\n")  # tracked env path: path-only failure persists
+    other = FAKES["ghp"]()
+    (repo / "other.txt").write_text(other + "\n")
+    try:
+        res = run(repo)
+    finally:
+        undeny(repo, ENV_EXAMPLE, "chmod")
+    assert_red(res, "other.txt:1", other)
+    assert ".env" + ".local" in res.stderr
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a21_tag_only_blob_at_protected_path_skipped(repo: Path) -> None:
+    secret = FAKES["groq"]()
+    blob = (
+        subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            cwd=repo,
+            input=("NOTE=" + secret + "\n").encode(),
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
+    tree = git(repo, "mktree", input=f"100644 blob {blob}\t{ENV_EXAMPLE}\n")
+    git(repo, "tag", "tonly", tree)
+    res = run(repo, "--history")
+    assert_red(res, "tag-only blob", secret)  # readable: scanned (positive control)
+    deny(repo, ENV_EXAMPLE, "chmod")
+    try:
+        res = run(repo, "--history")
+    finally:
+        undeny(repo, ENV_EXAMPLE, "chmod")
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
