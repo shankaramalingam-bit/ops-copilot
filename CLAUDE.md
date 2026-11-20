@@ -1,6 +1,6 @@
 # Ops Copilot
 
-Ops Copilot: AI assistant for Meridian Supply Co. (fictional). Phase 1: RAG over simulated warehouse and procurement docs. Stack: TBD (owner to confirm).
+Ops Copilot: AI assistant for Meridian Supply Co. (fictional). Phase 1: RAG over simulated warehouse and procurement docs. Stack: Python 3.12 + uv, LangChain, Chroma + BM25 hybrid retrieval, Ollama (nomic-embed-text; LLM via LLM_PROVIDER=ollama|groq), FastAPI + static web frontend.
 
 ## Standing rules
 1. A failed gate is never weakened by whatever is trying to pass it. Fix the cause or stop.

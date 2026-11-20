@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gate: lint. Replace the body with this app's real check. Exit non-zero on failure.
-# Fails closed until configured, so an unconfigured gate can never read as green.
+# Gate: lint (ruff check + ruff format --check).
 set -euo pipefail
-echo "gate_lint: NOT CONFIGURED — edit scripts/gate_lint.sh for this app" >&2
-exit 1
+cd "$(git rev-parse --show-toplevel)"
+uv run ruff check .
+uv run ruff format --check .

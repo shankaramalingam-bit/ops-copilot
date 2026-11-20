@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Gate: tests. Replace the body with this app's real check. Exit non-zero on failure.
-# Fails closed until configured, so an unconfigured gate can never read as green.
+# Gate: tests. pytest exit 5 (no tests collected) is a failure by design: set -e keeps it failing.
 set -euo pipefail
-echo "gate_tests: NOT CONFIGURED — edit scripts/gate_tests.sh for this app" >&2
-exit 1
+cd "$(git rev-parse --show-toplevel)"
+uv run pytest -q

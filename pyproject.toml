@@ -1,0 +1,52 @@
+[project]
+name = "ops-copilot"
+version = "0.1.0"
+description = "Ops Copilot: RAG assistant for Meridian Supply Co. (fictional)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "langchain-core",
+    "langchain-text-splitters",
+    "langchain-community",
+    "langchain-chroma",
+    "chromadb",
+    "langchain-ollama",
+    "langchain-groq",
+    "rank-bm25",
+    "fastapi",
+    "uvicorn[standard]",
+    "pyyaml",
+    "python-dotenv",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "httpx",
+    "types-PyYAML",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ops_copilot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# .env.example is a protected path (never read by agents); don't let collection stat it.
+addopts = "--ignore=.env.example"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Gate: typecheck. Replace the body with this app's real check. Exit non-zero on failure.
-# Fails closed until configured, so an unconfigured gate can never read as green.
+# Gate: typecheck (owner decision: mypy src/, missing imports ignored via pyproject).
 set -euo pipefail
-echo "gate_typecheck: NOT CONFIGURED — edit scripts/gate_typecheck.sh for this app" >&2
-exit 1
+cd "$(git rev-parse --show-toplevel)"
+uv run mypy src/
