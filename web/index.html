@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian Ops Portal</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app copilot" id="app">
+  <aside class="side">
+    <div class="brand"><div class="logo">M</div><div>Meridian Ops<small>Supply Co. · fictional</small></div></div>
+    <div class="sec">Operations</div>
+    <button type="button" class="nav on" data-p="dash"><span class="dot"></span>Dashboard</button>
+    <button type="button" class="nav" data-p="recv"><span class="dot"></span>Receiving</button>
+    <button type="button" class="nav" data-p="po"><span class="dot"></span>Purchase orders</button>
+    <button type="button" class="nav" data-p="sup"><span class="dot"></span>Suppliers</button>
+    <div class="sec">Knowledge</div>
+    <button type="button" class="nav" data-p="kb"><span class="dot"></span>SOPs &amp; policies</button>
+    <div class="sec">Ops Copilot</div>
+    <button type="button" class="nav" data-p="console"><span class="dot"></span>Console</button>
+    <div class="foot">Phase 1 · answers only<br>All dashboard data simulated</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div><div class="crumb" id="crumb">Operations</div><h1 id="title">Dashboard</h1></div>
+      <button type="button" class="search" id="opencp">⌕ Ask about any SOP or policy…</button>
+      <button type="button" class="tbtn" id="themebtn" aria-label="Toggle light or dark theme">◐ Theme</button>
+      <button type="button" class="cbtn" id="cpbtn"><span class="spark">✦</span>Ops Copilot</button>
+      <div class="avatar">JR</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section class="page on" id="dash">
+      <div class="banner">✦ Ops Copilot answers from Meridian's 10 SOPs and policies, with citations. Dashboard figures are simulated for the demo.</div>
+      <div class="notice" id="dash-err" hidden></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="cols">
+        <div class="card">
+          <h2>Inbound receipts · exceptions <span class="sub" id="rcv-asof"></span></h2>
+          <table><thead><tr><th>Receipt</th><th>PO</th><th>Supplier</th><th>Exception</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rcvrows"></tbody></table>
+        </div>
+        <div class="card">
+          <h2>Supplier quality <span class="sub">rolling 90 days</span></h2>
+          <div class="bars" id="bars"></div>
+        </div>
+      </div>
+      <div class="card gap-top">
+        <h2>POs awaiting approval <span class="sub">simulated</span></h2>
+        <table><thead><tr><th>PO</th><th>Supplier</th><th>Value</th><th>Approver</th><th>Status</th><th></th></tr></thead>
+        <tbody id="porows"></tbody></table>
+      </div>
+    </section>
+
+    <section class="page" id="recv"><div class="card"><h2>Receiving <span class="sub">simulated</span></h2><table><thead><tr><th>Receipt</th><th>Date</th><th>PO</th><th>Supplier</th><th>Item</th><th>Ordered</th><th>Received</th><th>Exception</th><th>Status</th><th></th></tr></thead><tbody id="recvlist"></tbody></table></div></section>
+    <section class="page" id="po"><div class="card"><h2>Purchase orders <span class="sub">simulated</span></h2><table><thead><tr><th>PO</th><th>Supplier</th><th>Description</th><th>Value</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody id="polist"></tbody></table></div></section>
+    <section class="page" id="sup"><div class="card"><h2>Supplier scorecards <span class="sub">simulated</span></h2><table><thead><tr><th>Supplier</th><th>Status</th><th>Received (90d)</th><th>Rejected (90d)</th><th>Quality</th><th>NCRs</th><th></th></tr></thead><tbody id="suplist"></tbody></table></div></section>
+
+    <section class="page" id="kb">
+      <div class="banner">These documents are the Copilot's only knowledge. If an answer isn't in them, it refuses.</div>
+      <div class="notice" id="kb-err" hidden></div>
+      <div class="docgrid" id="docs"></div>
+    </section>
+
+    <!-- CONSOLE -->
+    <section class="page" id="console">
+      <div class="tabs">
+        <button type="button" class="on" data-t="insp">Retrieval inspector</button>
+        <button type="button" data-t="trace">Run trace</button>
+        <button type="button" data-t="eval">Evals</button>
+      </div>
+      <div class="ctab on" id="insp"><div class="card" id="inspbody"><div class="empty">Ask Ops Copilot a question. This view then shows which chunks were found, how keyword and meaning search ranked them, and whether they passed the confidence gate.</div></div></div>
+      <div class="ctab" id="trace"><div class="card" id="tracebody"><div class="empty">No run yet.</div></div></div>
+      <div class="ctab" id="eval"><div id="evalbody"><div class="empty">Loading…</div></div></div>
+    </section>
+  </div>
+
+  <!-- COPILOT -->
+  <aside class="cp" aria-label="Ops Copilot">
+    <div class="hd"><div class="ic">✦</div><div><b>Ops Copilot</b><small>Answers from Meridian SOPs · cites every claim</small></div><button type="button" class="x" id="cpclose" aria-label="Close">×</button></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="chips" id="chips"></div>
+    <div class="scope">Answers only; actions come in Phase 2.</div>
+    <form id="f"><input id="in" maxlength="2000" placeholder="Ask about a procedure or policy…" autocomplete="off"><button type="submit" class="send" id="send">Ask</button></form>
+  </aside>
+</div>
+<script src="/helpers.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
