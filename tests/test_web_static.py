@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from ops_copilot.api import CSP, create_app
+from ops_copilot.api import create_app
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 JS_FILES = sorted(WEB.glob("*.js"))
@@ -33,10 +33,17 @@ FORBIDDEN = [
 ]
 ALLOWLIST: dict[str, set[str]] = {}
 
+EXPECTED_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    return TestClient(create_app(web_dir=WEB))
+    # d.1: the Host allow-list refuses TestClient's default "testserver"; localhost is allowed.
+    return TestClient(create_app(web_dir=WEB), base_url="http://localhost")
 
 
 def test_web_files_exist() -> None:
@@ -120,8 +127,10 @@ def test_index_served_with_csp(client: TestClient) -> None:
     r = client.get("/")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
-    assert r.headers["content-security-policy"] == CSP
-    assert "script-src 'self'" in r.headers["content-security-policy"]
+    csp = r.headers["content-security-policy"]
+    assert csp == EXPECTED_CSP  # literal d.2 policy, deliberately not imported from src/
+    assert "script-src 'self'" in csp
+    assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
     assert "Meridian Ops Portal" in r.text
 
 
@@ -183,3 +192,41 @@ def test_js_uses_validated_citations_and_sanitisers() -> None:
     assert not re.search(r"\.answer\s*\.(match|replace|matchAll|exec)|\.match\(.*answer", js)
     # refusal: chips are only built in the non-refused branch
     assert "if (!refused) {" in js
+
+
+# ------------------------------------------------- portal against the hardened API
+
+
+@pytest.mark.parametrize("path", ["/", "/app.js", "/helpers.js", "/app.css"])
+def test_portal_assets_carry_all_security_headers(client: TestClient, path: str) -> None:
+    r = client.get(path)
+    assert r.status_code == 200
+    assert r.headers["content-security-policy"] == EXPECTED_CSP
+    assert "unsafe-inline" not in r.headers["content-security-policy"]
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["referrer-policy"] == "no-referrer"
+
+
+def test_portal_host_allowlist_positive_control() -> None:
+    """The default TestClient host is refused, so the localhost client above is meaningful."""
+    assert TestClient(create_app(web_dir=WEB)).get("/").status_code == 400
+
+
+def test_portal_post_ask_json_from_portal_origin(make_pipeline) -> None:
+    pipe, _ = make_pipeline("A standard PO is approved per the matrix [PR-001 §2.1].")
+    c = TestClient(create_app(pipe, web_dir=WEB), base_url="http://localhost")
+    body = '{"question": "Who approves a standard purchase order?"}'
+    ok = c.post(
+        "/api/ask",
+        content=body,
+        headers={"content-type": "application/json", "origin": "http://localhost:8000"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert "answer" in ok.json()
+    bad = c.post(
+        "/api/ask",
+        content=body,
+        headers={"content-type": "text/plain", "origin": "http://localhost:8000"},
+    )
+    assert bad.status_code == 415
