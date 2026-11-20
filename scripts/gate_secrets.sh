@@ -248,11 +248,24 @@ scan_files() {
   done
 }
 
+# hash_safe_path <path>: success only for plain printable ASCII without `"`, `\`, CR or LF and
+# without leading/trailing spaces. `git hash-object --stdin-paths` C-unquotes a line that starts
+# with `"` and strips a trailing CR, so any other name could make it open a different file than
+# the one this gate scanned (even a .env*). Such paths are never passed to hash-object: their
+# index blob is always scanned.
+hash_safe_path() {
+  local LC_ALL=C
+  case "$1" in
+    "" | *[!\ -~]* | *\"* | *\\* | " "* | *" ") return 1 ;;
+  esac
+  return 0
+}
+
 # index_same <idx-file>: writes $TMPD/same = ascending record numbers (1-based, in index order) of
 # regular index entries whose blob is byte-identical to the working-tree file (so scan_files has
 # already scanned exactly that content). ONE `git hash-object --no-filters --stdin-paths` for all.
 # Only ordinary files are hashed: never a .env* path, a protected .env.example, any .env.example,
-# a symlink, a file that is not readable, or a path containing a newline. Any doubt -> no skip.
+# a symlink, a file that is not readable, or a path that is not hash_safe_path. Any doubt -> no skip.
 index_same() {
   local rec meta path mode sha stage n=0 hn=0
   : >"$TMPD/same"
@@ -266,6 +279,7 @@ index_same() {
     case "$mode" in 100644 | 100755) ;; *) continue ;; esac
     [ "$stage" = 0 ] || continue
     case "$path" in *$'\n'*) continue ;; esac
+    hash_safe_path "$path" || continue # hash-object would C-unquote / strip it: scan the blob
     if is_env_path "$path" || is_example "$path" || is_prot "$path"; then continue; fi
     if [ -f "$path" ] && [ ! -L "$path" ] && [ -r "$path" ]; then
       hn=$((hn + 1))
@@ -359,9 +373,31 @@ history_scan() {
   git log "${lopts[@]}" --format='commit %H' "${pathspec[@]}" >>"$TMPD/hist" 2>/dev/null || hist_ok=0
   if [ "$hist_ok" = 1 ]; then
     { grep -aE -e "^(commit [0-9a-f]+|diff --git .*|@@ .*|\\+.*$VENDOR.*)$" "$TMPD/hist" || true; } |
-      awk -v re="$ENV_RE" '
+      LC_ALL=C awk -v re="$ENV_RE" '
         /^commit [0-9a-f]+$/ { c = substr($2, 1, 12); next }
-        /^diff --git / { f = $0; sub(/^diff --git a\/.* b\//, "", f); b = f; sub(/^.*\//, "", b)
+        function unq(q,   o, i, c, n, d) {   # undo git C-quoting of a path
+          o = ""
+          for (i = 1; i <= length(q); i++) {
+            c = substr(q, i, 1)
+            if (c != "\\") { o = o c; continue }
+            i++; c = substr(q, i, 1)
+            if (c ~ /[0-7]/) {
+              n = c + 0
+              while (length(d = substr(q, i + 1, 1)) && d ~ /[0-7]/ && ++m < 3) { n = n * 8 + d; i++ }
+              m = 0
+              o = o ((n < 32 || n == 127) ? "?" : sprintf("%c", n))
+            } else if (c == "\"" || c == "\\") o = o c
+            else o = o "?"
+          }
+          return o
+        }
+        /^diff --git / { f = $0
+                         if (f ~ /^diff --git .* "b\/.*"$/) {
+                           t = f; k = 0
+                           while ((j = index(t, " \"b/")) > 0) { k += j; t = substr(t, j + 1) }
+                           f = unq(substr(f, k + 4, length(f) - k - 4))
+                         } else sub(/^diff --git a\/.* b\//, "", f)
+                         b = f; sub(/^.*\//, "", b)
                          skip = (b ~ re && b != ".env.example"); hdr = 1; next }
         /^@@ / { hdr = 0; next }
         hdr && /^\+\+\+ / { next }
