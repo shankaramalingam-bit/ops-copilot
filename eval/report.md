@@ -13,6 +13,8 @@ Raw data: `eval/results/20261120T090601Z.json`. Single run; local Ollama at temp
 | Refusal correct | 2/2 | 2/2 | PASS |
 | p95 latency | 15,877 ms | < 8,000 ms | **FAIL** |
 
+Notes: p95 = nearest-rank (equals max at n=15; linear interpolation ≈ 13,966 ms). hit@4/MRR are doc-level, not section-level.
+
 Supporting: citation accuracy 0.917 (11/12 answered), answer rate 0.923 (12/13 answerable), false refusals 1, questions passed 7/15.
 
 ## Definition of `passed`

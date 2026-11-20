@@ -99,3 +99,78 @@ def test_anchor_ids_split_lines_and_judge() -> None:
         "none",
     ]
     assert run_js("H.clampPct(150)") == 100
+
+
+# ---- unit H-app E1: section depth cap, chip label cap, refusal constant, eval summary
+
+LATEST = Path(__file__).resolve().parent.parent / "eval" / "latest.json"
+SERVER_REFUSAL = "I couldn't find this in Meridian's documents."
+
+
+def test_sanitize_section_depth_capped_at_five_levels() -> None:
+    assert run_js("H.sanitizeSection('1.2.3.4.5')") == "1.2.3.4.5"
+    assert run_js("H.sanitizeSection('1.2.3.4.5.6')") is None
+    assert run_js("H.sectionAnchorId('WH-003','1.2.3.4.5.6')") is None
+
+
+def test_chip_label_length_capped_at_40() -> None:
+    long_sec = "1." + ".".join(["123456789012"] * 4)  # valid depth (5), very long digits
+    cites = [{"doc_id": "WH-003", "section": long_sec, "valid": True}]
+    labels = run_js(f"H.validCitations({json.dumps(cites)}).map(c=>c.label)")
+    assert isinstance(labels, list) and len(labels) == 1
+    assert len(labels[0]) <= 40 and labels[0].startswith("WH-003 §1.")
+    # a normal label is untouched
+    short = [{"doc_id": "WH-003", "section": "2.1", "valid": True}]
+    assert run_js(f"H.validCitations({json.dumps(short)}).map(c=>c.label)") == ["WH-003 §2.1"]
+    # too deep: no chip at all
+    deep = [{"doc_id": "WH-003", "section": "1.2.3.4.5.6", "valid": True}]
+    assert run_js(f"H.validCitations({json.dumps(deep)})") == []
+
+
+def test_client_refusal_constant_is_identical_to_server_text() -> None:
+    assert run_js("H.REFUSAL_TEXT") == SERVER_REFUSAL
+    from ops_copilot.answer import REFUSAL
+
+    assert run_js("H.REFUSAL_TEXT") == REFUSAL
+
+
+def test_app_renders_refusal_constant_not_server_answer() -> None:
+    js = (HELPERS.parent / "app.js").read_text(encoding="utf-8")
+    assert "H.REFUSAL_TEXT" in js
+    assert "multiline(refused ? H.REFUSAL_TEXT : res.answer)" in js
+
+
+def test_eval_summary_reads_real_latest_json() -> None:
+    expr = (
+        f"H.evalSummary(JSON.parse(require('fs').readFileSync({json.dumps(str(LATEST))},'utf8')))"
+    )
+    s = run_js(expr)
+    assert isinstance(s, dict)
+    k = s["kpis"]
+    assert k["faithfulness"]["value"] == pytest.approx(0.632, abs=5e-4)
+    assert k["faithfulness"]["text"] == "0.63" and k["faithfulness"]["verdict"] == "fail"
+    assert k["hit4"]["value"] == 1.0 and k["hit4"]["verdict"] == "pass"
+    assert k["mrr"]["value"] == 1.0 and k["mrr"]["verdict"] == "pass"
+    assert k["refusal"]["text"] == "2 / 2" and k["refusal"]["verdict"] == "pass"
+    assert k["p95"]["seconds"] == pytest.approx(15.877) and k["p95"]["verdict"] == "fail"
+    assert k["p95"]["text"] == "15.9 s"
+    assert len(s["rows"]) == 15
+    assert s["rows"][0]["id"] == "Q1"
+
+
+def test_eval_summary_matches_committed_file_values() -> None:
+    d = json.loads(LATEST.read_text(encoding="utf-8"))
+    m = d["metrics"]
+    assert (round(m["faithfulness"], 3), m["hit_at_4"], m["mrr"]) == (0.632, 1.0, 1.0)
+    assert (m["refusal_correct"], m["refusal_total"], m["p95_latency_ms"]) == (2, 2, 15877.0)
+
+
+def test_eval_summary_edge_cases() -> None:
+    assert run_js("H.evalSummary({}).kpis.refusal.verdict") == "none"
+    assert run_js("H.evalSummary({}).rows") == []
+    assert (
+        run_js("H.evalSummary({metrics:{refusal_correct:1,refusal_total:2}}).kpis.refusal.verdict")
+        == "fail"
+    )
+    assert run_js("H.evalSummary({metrics:{p95_latency_ms:7999}}).kpis.p95.verdict") == "pass"
+    assert run_js("H.evalSummary({metrics:{p95_latency_ms:8000}}).kpis.p95.verdict") == "fail"

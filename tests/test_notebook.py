@@ -84,3 +84,29 @@ def test_shows_failing_kpis_and_refusal(nb: dict) -> None:
     text = "\n".join(_output_text(c) for c in nb["cells"] if c["cell_type"] == "code")
     assert "FAIL" in text and "PASS" in text
     assert "refused: True" in text
+
+
+def _code_cells(nb: dict) -> list[dict]:
+    return [c for c in nb["cells"] if c["cell_type"] == "code"]
+
+
+def test_settings_are_not_printed(nb: dict) -> None:
+    src = "\n".join("".join(c["source"]) for c in _code_cells(nb))
+    assert "print(settings)" not in src
+    text = "\n".join(_output_text(c) for c in _code_cells(nb))
+    assert "Settings(" not in text and "ollama_base_url" not in text
+
+
+def test_saved_refusal_cell_shows_llm_zero_ms(nb: dict) -> None:
+    cells = [
+        c for c in _code_cells(nb) if "forklift operators be recertified" in "".join(c["source"])
+    ]
+    assert len(cells) == 1
+    out = _output_text(cells[0])
+    assert "refused: True" in out and "reason: below_gate" in out
+    assert re.search(r"'llm': 0\.0\b", out), out
+
+
+def test_no_url_in_any_output(nb: dict) -> None:
+    for c in _code_cells(nb):
+        assert not re.search(r"https?://", _output_text(c)), "".join(c["source"])[:60]

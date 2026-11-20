@@ -15,9 +15,14 @@ docker compose -f deploy/docker-compose.yml exec ollama ollama pull llama3.1:8b
 
 Open http://localhost:8000. Stop with `docker compose -f deploy/docker-compose.yml down` (add `-v` to also delete the models).
 
-The default provider is Ollama with `llama3.1:8b`. To change settings, create a `.env` at the repository root (optional;
-compose skips it if absent) with `LLM_PROVIDER`, `OLLAMA_MODEL`, and, only for `LLM_PROVIDER=groq`, `GROQ_API_KEY`. Never commit `.env`;
-the Docker build context excludes it, so it is never baked into the image.
+The default provider is Ollama with `llama3.1:8b`. Compose reads `LLM_PROVIDER`, `OLLAMA_MODEL` and, only for
+`LLM_PROVIDER=groq`, `GROQ_API_KEY` from the shell environment or from an optional `.env` at the repository root
+(compose uses that file only to resolve `${...}` in the compose file). Only these three variables are passed to the
+container, by explicit `environment:` entries; no other key from the shell or `.env` reaches it. Never commit `.env`;
+the Docker build context excludes `**/.env*`, so it is never baked into the image.
+
+Both services have health checks (`app`: `GET /api/docs` with `Host: localhost`; `ollama`: `ollama list`), and `app`
+starts only once `ollama` is healthy.
 
 ## Why the port is bound to 127.0.0.1
 
@@ -33,6 +38,8 @@ and do not put the service behind a public proxy, until the owner has decided on
 
 ## Image notes
 
-Non-root user (`app`), `python:3.12-slim`, dependencies from `uv.lock` (`--frozen --no-dev`). Only `src/`, `data/docs`, `data/sim`,
-`web/` and the latest eval result are copied. `.dockerignore` (and `Dockerfile.dockerignore`, which BuildKit prefers for a
-Dockerfile in a subdirectory; keep them identical) excludes `.env*`, `.venv`, `data/cache`, `.git` and notebooks.
+Non-root user (`app`), dependencies from `uv.lock` (`--frozen --no-dev`). Images are pinned to explicit tags:
+`python:3.12.14-slim`, `ghcr.io/astral-sh/uv:0.12.5`, `ollama/ollama:0.40.16` (no `:latest`). Only `src/`, `data/docs`,
+`data/sim`, `web/` and the latest eval result are copied. The root `.dockerignore`, `deploy/.dockerignore` and
+`deploy/Dockerfile.dockerignore` (BuildKit prefers the last for a Dockerfile in a subdirectory; keep all three identical)
+exclude `**/.env*`, `.venv`, `data/cache`, `.git` and notebooks.

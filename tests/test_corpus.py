@@ -292,7 +292,10 @@ NUMBER_RULES: dict[str, tuple[str, str]] = {
     "price tolerance pct": (r"within ±(\d+)% or \$\d+", "2"),
     "price tolerance usd": (r"within ±\d+% or \$(\d+)", "50"),
     "net terms": (r"\b[Nn]et (\d+)\b", "45"),
-    "cut-off time": (r"received (?:by|after) (\d+) pm", "3"),
+    "cut-off time": (
+        r"(?:received|placed|entered|submitted)?\s*(?:by|after|before)\s+(\d+)\s*(?:pm|p\.m\.)",
+        "3",
+    ),
     "fill rate": (r"fill-rate target for Tier-1 accounts is (\d+)%", "98"),
     "damage-claim hours": (r"acknowledged within (\d+) business hours", "4"),
     "RMA-credit days": (r"credit is issued within (\d+) days", "5"),
@@ -305,6 +308,32 @@ def test_governing_number_consistent_across_corpus(name: str) -> None:
     found = re.findall(pattern, _corpus(), re.I)
     assert found, f"positive control empty for {name}"
     assert set(found) == {expected}, f"{name}: {found}"
+
+
+OLD_CUTOFF_RULE = r"received (?:by|after) (\d+) pm"
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Orders for Harbor Point Grocers placed after 2 pm ship next day.",
+        "Orders entered before 4 pm ship the same day.",
+        "Orders submitted by 2 p.m. ship the same day.",
+        "Orders received after 5 PM ship next day.",
+    ],
+)
+def test_cutoff_rule_catches_conflicting_cutoff_wording(sentence: str) -> None:
+    """Self-test on a copy of the corpus text (files are untouched): the widened rule goes red on
+    a conflicting cut-off, and the previous 'received (by|after)' rule would not have."""
+    pattern, expected = NUMBER_RULES["cut-off time"]
+    mutated = _read("CS-001") + "\n" + sentence + "\n" + _corpus()
+    found = re.findall(pattern, mutated, re.I)
+    assert set(found) != {expected}, "widened rule must flag the conflicting cut-off"
+    # baseline (clean corpus) is green
+    assert set(re.findall(pattern, _corpus(), re.I)) == {expected}
+    if "placed" in sentence or "entered" in sentence or "submitted" in sentence:
+        old = re.findall(OLD_CUTOFF_RULE, mutated, re.I)
+        assert set(old) == {expected}, "old rule missed it (that is why it was widened)"
 
 
 def test_no_conflicting_sentence_level_numbers() -> None:

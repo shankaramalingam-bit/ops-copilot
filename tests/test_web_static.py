@@ -185,7 +185,7 @@ def test_js_uses_validated_citations_and_sanitisers() -> None:
     assert "validCitations(res.citations)" in js
     assert "valid !== true" in helpers
     assert r"/^[A-Z]{2,3}-\d{3}$/" in helpers
-    assert r"/^\d+(\.\d+)*$/" in helpers
+    assert r"/^\d+(\.\d+){0,4}$/" in helpers  # at most 5 levels
     # ids built from API values go through getElementById, not selector strings
     assert not re.search(r"querySelector(All)?\([^)]*\+", js)
     # answer text is never regex-scanned for citations

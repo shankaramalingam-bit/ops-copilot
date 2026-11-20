@@ -3,7 +3,10 @@
   "use strict";
 
   var DOC_RE = /^[A-Z]{2,3}-\d{3}$/;
-  var SEC_RE = /^\d+(\.\d+)*$/;
+  var SEC_RE = /^\d+(\.\d+){0,4}$/; /* at most 5 levels */
+  var LABEL_MAX = 40;
+  /* Identical to the server's REFUSAL text; rendered client-side whenever refused === true. */
+  var REFUSAL_TEXT = "I couldn't find this in Meridian's documents.";
 
   function sanitizeDocId(v) {
     return typeof v === "string" && DOC_RE.test(v) ? v : null;
@@ -28,7 +31,9 @@
       var key = d + "#" + s;
       if (seen[key]) continue;
       seen[key] = true;
-      out.push({ doc_id: d, section: s, label: d + " §" + s });
+      var label = d + " §" + s;
+      if (label.length > LABEL_MAX) label = label.slice(0, LABEL_MAX - 1) + "…";
+      out.push({ doc_id: d, section: s, label: label });
     }
     return out;
   }
@@ -108,7 +113,48 @@
     return undefined;
   }
 
+  function p95Seconds(d) {
+    var s = pick(d, ["p95_latency_s", "p95_s", "p95_seconds", "latency_p95_s"]);
+    if (s !== undefined) return Number(s);
+    var ms = pick(d, ["p95_latency_ms", "p95_ms", "latency_p95_ms"]);
+    return ms !== undefined ? Number(ms) / 1000 : undefined;
+  }
+
+  /* Pure reader for eval/latest.json: the 5 KPI values + verdicts and the per-question rows. */
+  function evalSummary(d) {
+    var faith = pick(d, ["faithfulness"]);
+    var hit = pick(d, ["hit_at_4", "hit@4", "hit4", "retrieval_hit_at_4"]);
+    var mrr = pick(d, ["mrr", "MRR"]);
+    var refOk = pick(d, ["refusal_correct", "refusals_correct", "refusal_ok"]);
+    var refTotal = pick(d, ["refusal_total", "refusals_total", "refusal_expected"]);
+    var p95 = p95Seconds(d);
+    var refVerdict = "none";
+    var refText = "–";
+    if (refOk !== undefined) {
+      var total = refTotal !== undefined ? Number(refTotal) : 2;
+      refText = Number(refOk) + " / " + total;
+      refVerdict = Number(refOk) >= 2 && Number(refOk) >= total ? "pass" : "fail";
+    }
+    var rows = null;
+    ["questions", "results", "items", "rows", "per_question"].forEach(function (key) {
+      if (!rows && d && Array.isArray(d[key])) rows = d[key];
+    });
+    return {
+      kpis: {
+        faithfulness: { value: faith, text: fmtNum(faith, 2), verdict: judge("faithfulness", faith) },
+        hit4: { value: hit, text: fmtNum(hit, 2), verdict: judge("hit4", hit) },
+        mrr: { value: mrr, text: fmtNum(mrr, 2), verdict: judge("mrr", mrr) },
+        refusal: { text: refText, verdict: refVerdict },
+        p95: { seconds: p95, text: p95 === undefined ? "–" : fmtNum(p95, 1) + " s", verdict: judge("p95s", p95) }
+      },
+      rows: rows || []
+    };
+  }
+
   var api = {
+    REFUSAL_TEXT: REFUSAL_TEXT,
+    p95Seconds: p95Seconds,
+    evalSummary: evalSummary,
     sanitizeDocId: sanitizeDocId,
     sanitizeSection: sanitizeSection,
     validCitations: validCitations,

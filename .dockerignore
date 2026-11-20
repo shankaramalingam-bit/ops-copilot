@@ -1,0 +1,15 @@
+**/.env*
+.venv
+data/cache
+.git
+.github
+.claude
+**/__pycache__
+**/*.pyc
+.ipynb_checkpoints
+**/.ipynb_checkpoints
+notebooks
+tests
+.pytest_cache
+.mypy_cache
+.ruff_cache

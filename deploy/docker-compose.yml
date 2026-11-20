@@ -1,30 +1,53 @@
 # Run from the repository root:  docker compose -f deploy/docker-compose.yml up --build
 # There is NO authentication. The app port is published on the loopback interface only.
+#
+# Configuration: compose reads LLM_PROVIDER, OLLAMA_MODEL and GROQ_API_KEY from the shell
+# environment or from an optional .env file at the repository root (used by compose only for
+# ${...} interpolation; it is never passed wholesale to the container). Only the three variables
+# listed under `environment:` reach the app; no other key is forwarded. Never commit a .env.
 services:
   app:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     depends_on:
-      - ollama
-    # Optional: put LLM_PROVIDER / OLLAMA_MODEL (and GROQ_API_KEY only for groq) in a .env file at
-    # the repository root. Never commit it. The file is not required.
-    env_file:
-      - path: ../.env
-        required: false
+      ollama:
+        condition: service_healthy
     environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}     # only used when LLM_PROVIDER=groq
       OLLAMA_BASE_URL: http://ollama:11434
       OPS_COPILOT_HOST: 0.0.0.0           # container-internal bind; the published port is loopback
       OPS_COPILOT_ALLOW_NONLOCAL: "1"     # required for the non-loopback bind inside the container
       OPS_COPILOT_ALLOWED_HOSTS: localhost,127.0.0.1
+    healthcheck:
+      # urllib raises on a non-2xx status, so a failing /api/docs makes the check fail.
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - >-
+          import urllib.request as u;
+          u.urlopen(u.Request('http://127.0.0.1:8000/api/docs', headers={'Host': 'localhost'}), timeout=4)
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 30s
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
 
   ollama:
-    image: ollama/ollama
+    image: ollama/ollama:0.40.16
     volumes:
       - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     # No ports: only the app container reaches Ollama, over the compose network.
     restart: unless-stopped
 

@@ -346,7 +346,7 @@
   function addAnswer(res) {
     var refused = res.refused === true;
     var box = el("div", refused ? "a refuse" : "a");
-    var ans = multiline(res.answer);
+    var ans = multiline(refused ? H.REFUSAL_TEXT : res.answer);
     box.appendChild(ans);
     var meta = el("div", "meta");
     if (!refused) {
@@ -533,12 +533,6 @@
     var d = el("div", "kpi k-" + color + (verdict === "pass" || verdict === "fail" ? " " + verdict : ""));
     return add(d, el("div", "l", label), el("div", "v", text), el("div", "d", target + (verdict === "pass" ? " · pass" : verdict === "fail" ? " · fail" : "")));
   }
-  function p95Seconds(d) {
-    var s = H.pick(d, ["p95_latency_s", "p95_s", "p95_seconds", "latency_p95_s"]);
-    if (s !== undefined) return Number(s);
-    var ms = H.pick(d, ["p95_latency_ms", "p95_ms", "latency_p95_ms"]);
-    return ms !== undefined ? Number(ms) / 1000 : undefined;
-  }
   function cellText(v) {
     if (v === null || v === undefined) return "";
     if (Array.isArray(v)) return v.map(String).join(", ");
@@ -548,35 +542,20 @@
   function renderEval(d) {
     var box = byId("evalbody");
     clear(box);
-    var faith = H.pick(d, ["faithfulness"]);
-    var hit = H.pick(d, ["hit_at_4", "hit@4", "hit4", "retrieval_hit_at_4"]);
-    var mrr = H.pick(d, ["mrr", "MRR"]);
-    var refOk = H.pick(d, ["refusal_correct", "refusals_correct", "refusal_ok"]);
-    var refTotal = H.pick(d, ["refusal_total", "refusals_total", "refusal_expected"]);
-    var p95 = p95Seconds(d);
-
+    var S = H.evalSummary(d);
+    var kp = S.kpis;
     var k = el("div", "ekpis");
-    k.appendChild(evalKpi("teal", "Faithfulness", H.fmtNum(faith, 2), "target ≥ 0.90", H.judge("faithfulness", faith)));
-    k.appendChild(evalKpi("violet", "Retrieval hit@4", H.fmtNum(hit, 2), "target ≥ 0.85", H.judge("hit4", hit)));
-    k.appendChild(evalKpi("amber", "MRR", H.fmtNum(mrr, 2), "target ≥ 0.70", H.judge("mrr", mrr)));
-    var refVerdict = "none";
-    var refText = "–";
-    if (refOk !== undefined) {
-      var total = refTotal !== undefined ? Number(refTotal) : 2;
-      refText = Number(refOk) + " / " + total;
-      refVerdict = Number(refOk) >= 2 && Number(refOk) >= total ? "pass" : "fail";
-    }
-    k.appendChild(evalKpi("red", "Refusal correct", refText, "target 2 / 2", refVerdict));
-    k.appendChild(evalKpi("green", "p95 latency", p95 === undefined ? "–" : H.fmtNum(p95, 1) + " s", "target < 8 s", H.judge("p95s", p95)));
+    k.appendChild(evalKpi("teal", "Faithfulness", kp.faithfulness.text, "target ≥ 0.90", kp.faithfulness.verdict));
+    k.appendChild(evalKpi("violet", "Retrieval hit@4", kp.hit4.text, "target ≥ 0.85", kp.hit4.verdict));
+    k.appendChild(evalKpi("amber", "MRR", kp.mrr.text, "target ≥ 0.70", kp.mrr.verdict));
+    k.appendChild(evalKpi("red", "Refusal correct", kp.refusal.text, "target 2 / 2", kp.refusal.verdict));
+    k.appendChild(evalKpi("green", "p95 latency", kp.p95.text, "target < 8 s", kp.p95.verdict));
     box.appendChild(k);
 
-    var rows = null;
-    ["questions", "results", "items", "rows", "per_question"].forEach(function (key) {
-      if (!rows && Array.isArray(d[key])) rows = d[key];
-    });
+    var rows = S.rows;
     var card = el("div", "card");
     card.appendChild(el("h2", null, "Per-question results"));
-    if (!rows || !rows.length) {
+    if (!rows.length) {
       card.appendChild(el("div", "empty", "No per-question rows in this eval run."));
       box.appendChild(card);
       return;

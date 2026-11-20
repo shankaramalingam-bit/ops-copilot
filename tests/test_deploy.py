@@ -39,7 +39,9 @@ def test_compose_app_env_and_volume() -> None:
 
 def test_compose_has_no_secret_values() -> None:
     text = (DEPLOY / "docker-compose.yml").read_text()
-    assert not re.search(r"(?i)(api_key|secret|token|password)\s*[:=]\s*\S", text)
+    # a `${VAR:-}` interpolation is a reference, not a value
+    text = re.sub(r"\$\{[^}]*\}", "REF", text)
+    assert not re.search(r"(?i)(api_key|secret|token|password)\s*[:=]\s*(?!REF\b)\S", text)
 
 
 def test_dockerfile_non_root_and_no_env_copy() -> None:
@@ -49,18 +51,78 @@ def test_dockerfile_non_root_and_no_env_copy() -> None:
     for ln in lines:
         if ln.upper().startswith(("COPY", "ADD")):
             assert ".env" not in ln and "data/cache" not in ln
-    assert any(ln.startswith("FROM python:3.12-slim") for ln in lines)
+    assert any(ln.startswith("FROM python:3.12.14-slim") for ln in lines)
 
 
 def test_dockerignore_excludes_secrets_and_caches() -> None:
-    # Context is the repo root; BuildKit reads <Dockerfile>.dockerignore, so both copies must match.
-    for name in (".dockerignore", "Dockerfile.dockerignore"):
-        entries = {ln.strip() for ln in (DEPLOY / name).read_text().splitlines() if ln.strip()}
-        for needed in (".env*", ".venv", "data/cache", ".git"):
-            assert needed in entries, (name, needed)
-    assert (DEPLOY / ".dockerignore").read_text() == (
-        DEPLOY / "Dockerfile.dockerignore"
-    ).read_text()
+    # Context is the repo root; BuildKit reads <Dockerfile>.dockerignore, else the root
+    # .dockerignore. All three copies must be identical.
+    paths = [ROOT / ".dockerignore", DEPLOY / ".dockerignore", DEPLOY / "Dockerfile.dockerignore"]
+    for path in paths:
+        assert path.is_file(), path
+        entries = {ln.strip() for ln in path.read_text().splitlines() if ln.strip()}
+        for needed in ("**/.env*", ".venv", "data/cache", ".git"):
+            assert needed in entries, (path, needed)
+        assert not any(e.startswith("!") for e in entries), (path, "no re-includes")
+        assert ".env*" not in entries, "root-only pattern would miss nested .env files"
+    texts = {p.read_text() for p in paths}
+    assert len(texts) == 1, "root, deploy/.dockerignore and Dockerfile.dockerignore must match"
+
+
+def _image_refs() -> list[str]:
+    refs = []
+    for ln in (DEPLOY / "Dockerfile").read_text().splitlines():
+        m = re.match(r"FROM\s+(?:--\S+\s+)?(\S+)", ln, re.I)
+        if m and m.group(1).lower() != "scratch":
+            refs.append(m.group(1))
+        m = re.search(r"COPY\s+--from=(\S+)", ln, re.I)
+        if m and not re.fullmatch(r"\d+|[a-z_][\w-]*", m.group(1)):
+            refs.append(m.group(1))
+    refs += [s["image"] for s in _compose()["services"].values() if "image" in s]
+    return refs
+
+
+def test_images_are_pinned_to_explicit_non_latest_tags() -> None:
+    refs = _image_refs()
+    assert any(r.startswith("python:3.12.14-slim") for r in refs)
+    assert any(r.startswith("ghcr.io/astral-sh/uv:0.12.5") for r in refs)
+    assert any(r.startswith("ollama/ollama:") for r in refs)
+    for ref in refs:
+        last = ref.split("@")[0].rsplit("/", 1)[-1]
+        tag = last.split(":", 1)[1] if ":" in last else ""
+        assert tag, f"untagged image: {ref}"
+        assert tag != "latest", f"floating tag: {ref}"
+        assert re.match(r"\d+\.\d+", tag), f"tag is not a version: {ref}"
+
+
+def test_compose_has_no_env_file_and_explicit_environment() -> None:
+    c = _compose()
+    assert "env_file" not in (DEPLOY / "docker-compose.yml").read_text()
+    for name, svc in c["services"].items():
+        assert "env_file" not in svc, name
+    env = c["services"]["app"]["environment"]
+    env = dict(e.split("=", 1) for e in env) if isinstance(env, list) else env
+    assert {"LLM_PROVIDER", "OLLAMA_MODEL", "GROQ_API_KEY"} <= set(env)
+    assert env["GROQ_API_KEY"] == "${GROQ_API_KEY:-}"  # reference only, empty default
+    assert env["LLM_PROVIDER"].startswith("${LLM_PROVIDER")
+    assert env["OLLAMA_MODEL"].startswith("${OLLAMA_MODEL")
+    # no other key is passed through from the host
+    for k, v in env.items():
+        if "${" in str(v):
+            assert k in {"LLM_PROVIDER", "OLLAMA_MODEL", "GROQ_API_KEY"}, k
+
+
+def test_healthchecks_and_service_healthy_dependency() -> None:
+    c = _compose()["services"]
+    app_hc = c["app"]["healthcheck"]["test"]
+    joined = " ".join(app_hc)
+    assert "http://127.0.0.1:8000/api/docs" in joined
+    assert "urllib" in joined and "localhost" in joined  # Host header for the allow-list
+    assert c["ollama"]["healthcheck"]["test"] == ["CMD", "ollama", "list"]
+    for svc in ("app", "ollama"):
+        hc = c[svc]["healthcheck"]
+        assert {"interval", "timeout", "retries"} <= set(hc), svc
+    assert c["app"]["depends_on"] == {"ollama": {"condition": "service_healthy"}}
 
 
 def test_readme_has_start_command_and_mermaid() -> None:

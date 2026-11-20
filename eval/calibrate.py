@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from run_eval import guard_local_provider
 
 ROOT = Path(__file__).resolve().parent.parent
 EVAL_DIR = ROOT / "eval"
@@ -64,6 +65,9 @@ def main() -> int:
 
     cal: dict[str, Any] = yaml.safe_load((EVAL_DIR / "calibration.yaml").read_text())
     s = Settings.from_env()
+    refusal = guard_local_provider(s)
+    if refusal is not None:
+        return refusal
     pipe = Pipeline(s)
     rows: list[dict[str, Any]] = []
     for label, key in (("answerable", "answerable"), ("unanswerable", "unanswerable")):
@@ -100,8 +104,8 @@ def main() -> int:
     (EVAL_DIR / "results" / "calibration.json").write_text(json.dumps(out, indent=2) + "\n")
 
     print(f"embed_model={s.embed_model} questions: {len(pos)} answerable, {len(neg)} unanswerable")
-    for r in sorted(rows, key=lambda r: r["max_cosine"]):
-        print(f"  {r['label']:<12} {r['id']:<4} {r['max_cosine']:.4f}  {r['question']}")
+    for row in sorted(rows, key=lambda x: x["max_cosine"]):
+        print(f"  {row['label']:<12} {row['id']:<4} {row['max_cosine']:.4f}  {row['question']}")
     for name in ("answerable", "unanswerable"):
         d = out["distribution"][name]
         print(
