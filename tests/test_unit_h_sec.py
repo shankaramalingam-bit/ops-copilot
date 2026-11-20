@@ -10,6 +10,7 @@ import asyncio
 import pytest
 
 from ops_copilot.api import allowed_hosts_from_env, create_app
+from ops_copilot.config import ConfigError
 
 
 class Echo:
@@ -103,9 +104,57 @@ def test_malformed_host_rejected(app, host):
 
 
 def test_port_boundaries_accepted(app):
-    assert call(app, [("host", "localhost:0")]) == 200
+    assert call(app, [("host", "localhost:1")]) == 200
+    assert call(app, [("host", "localhost:8000")]) == 200
     assert call(app, [("host", "localhost:65535")]) == 200
-    assert call(app, [("host", "localhost:00080")]) == 200  # 5 digits
+
+
+@pytest.mark.parametrize(
+    "host", ["localhost:0", "localhost:00000", "LOCALHOST:08000", "localhost:00080", "localhost:01"]
+)
+def test_port_zero_and_leading_zeros_rejected(app, host):
+    assert call(app, [("host", "localhost:1")]) == 200  # positive control
+    assert call(app, [("host", host)]) == 400
+
+
+@pytest.mark.parametrize(
+    "host", ["localhost\x1f", "localhost\x0b", "localhost\x85", "\xa0localhost", "localhost\x0c"]
+)
+def test_non_ows_whitespace_rejected(app, host):
+    assert call(app, [("host", "localhost")]) == 200  # positive control
+    assert call(app, [("host", host)]) == 400
+
+
+@pytest.mark.parametrize("host", ["\tlocalhost", "localhost:8000 ", " localhost\t"])
+def test_ows_space_tab_accepted(app, host):
+    assert call(app, [("host", host)]) == 200
+
+
+LOOP = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def test_bracket_space_entry_adds_nothing(monkeypatch):
+    for v in ("[ ]", "[],[ ], "):
+        monkeypatch.setenv("OPS_COPILOT_ALLOWED_HOSTS", v)
+        assert allowed_hosts_from_env() == LOOP, v
+    monkeypatch.delenv("OPS_COPILOT_ALLOWED_HOSTS")
+    assert allowed_hosts_from_env(["[ ]"]) == LOOP
+
+
+@pytest.mark.parametrize("entry", ["example.com:8443", "[::1]:8443", "ok.example,example.com:80"])
+def test_allowed_hosts_entry_with_port_rejected(monkeypatch, entry):
+    monkeypatch.setenv("OPS_COPILOT_ALLOWED_HOSTS", entry)
+    with pytest.raises(ConfigError) as ei:
+        allowed_hosts_from_env()
+    assert str(ei.value) == "OPS_COPILOT_ALLOWED_HOSTS entries must be hostnames without ports"
+    monkeypatch.delenv("OPS_COPILOT_ALLOWED_HOSTS")
+    with pytest.raises(ConfigError):
+        allowed_hosts_from_env(["example.com:8443"])
+
+
+def test_ipv6_allowed_hosts_entry_still_ok(monkeypatch):
+    monkeypatch.setenv("OPS_COPILOT_ALLOWED_HOSTS", "[2001:db8::1],Example.COM")
+    assert {"2001:db8::1", "example.com"} <= allowed_hosts_from_env()
 
 
 def test_duplicate_host_rejected(app):

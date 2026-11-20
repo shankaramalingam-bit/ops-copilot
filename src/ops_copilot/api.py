@@ -28,7 +28,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .catalog import load_catalog, load_dashboard, load_eval_latest
-from .config import MAX_QUESTION_CHARS
+from .config import MAX_QUESTION_CHARS, ConfigError
 from .pipeline import Pipeline
 from .types import AskResult
 
@@ -106,7 +106,12 @@ def _bound_reason(result: AskResult) -> AskResult:
 
 
 def _bare_host(host: str) -> str:
-    return host.strip().lower().strip("[]")
+    """Config entry -> bare lowercase hostname; "" if it was empty. Ports are a config error."""
+    entry = host.strip()
+    tail = entry.rsplit("]", 1)[1] if "]" in entry else entry
+    if tail.strip() and (":" in tail or "]" in entry):
+        raise ConfigError("OPS_COPILOT_ALLOWED_HOSTS entries must be hostnames without ports")
+    return entry.strip("[]").strip().lower()
 
 
 def allowed_hosts_from_env(extra: Iterable[str] = ()) -> frozenset[str]:
@@ -116,7 +121,9 @@ def allowed_hosts_from_env(extra: Iterable[str] = ()) -> frozenset[str]:
     return frozenset(b for b in bare if b)  # filtered AFTER bracket-stripping: "[]" adds nothing
 
 
-_HOST_RE = re.compile(r"(?:\[([^\[\]\s:]*:[^\[\]\s]*)\]|([^\[\]\s:]+))(?::([0-9]{1,5}))?", re.ASCII)
+_HOST_RE = re.compile(
+    r"(?:\[([^\[\]\s:]*:[^\[\]\s]*)\]|([^\[\]\s:]+))(?::([1-9][0-9]{0,4}))?", re.ASCII
+)
 
 
 def _host_of_header(value: str) -> str:
@@ -125,7 +132,7 @@ def _host_of_header(value: str) -> str:
     Strict: a name or a bracketed IPv6 literal, then optionally `:<1-5 ASCII digits <= 65535>`.
     Anything after the name or `]` other than that is malformed.
     """
-    m = _HOST_RE.fullmatch(value.strip().lower())
+    m = _HOST_RE.fullmatch(value.strip(" \t").lower())
     if m is None:
         return ""
     if m.group(3) is not None and int(m.group(3)) > 65535:
