@@ -1,0 +1,25 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # Add the stack's toolchain setup here (language runtimes, services).
+      - run: for g in scripts/gate_*.sh; do echo "::group::$g"; bash "$g"; echo "::endgroup::"; done
+  deploy:
+    needs: gates            # depends ONLY on the gate scripts
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Replace with the stack's deploy command"
+  governance:               # optional, non-blocking; deploy never depends on it
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Add governance checks here only when an incident earns them"
