@@ -67,6 +67,12 @@ P_BEARER='Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,}'
 P_URL='://[^/[:space:]:@]+:[^/[:space:]@]+@'
 P_GEN='(api[_-]?key|secret|token|password)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./+=-]{16,}'
 PATTERN="($VENDOR|$P_BEARER|$P_URL|$P_GEN)"
+# Case rules (a.3.1): the non-vendor text patterns (bearer, url, generic) are matched
+# CASE-INSENSITIVELY (DB_PASSWORD=..., API_KEY: ... are secrets too). Vendor patterns are
+# case-specific literal prefixes (gsk_, sk-, AKIA, ghp_, ...) and are matched with exact case,
+# so an upper-cased lookalike is not a vendor key. Every grep that applies the generic pattern
+# therefore runs with -i on TEXTPAT and, separately, without -i on VENDOR.
+TEXTPAT="($P_BEARER|$P_URL|$P_GEN)"
 
 IN_CI=0
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then IN_CI=1; fi
@@ -150,13 +156,23 @@ is_env_target() {
 
 # rp <string>: print the string, or <redacted-path> if it matches a vendor or generic pattern.
 rp() {
-  if grep -qaE -e "$PATTERN" <<<"$1"; then printf '<redacted-path>'; else printf '%s' "$1"; fi
+  if grep -qaE -e "$VENDOR" <<<"$1" || grep -qaiE -e "$TEXTPAT" <<<"$1"; then
+    printf '<redacted-path>'
+  else
+    printf '%s' "$1"
+  fi
 }
 
 # scan_lines <file>: prints matching line numbers (never text). rc 2 = read error (fail closed).
 scan_lines() {
   local f="$1" rc=0 a b
-  a="$(grep -IEn -e "$PATTERN" -- "$f" 2>/dev/null | cut -d: -f1)" || rc=$?
+  # fast negative path (one process for a clean file): a case-insensitive, binary-as-text match of
+  # EVERY pattern is a superset of both exact scans below, so no match here means no hits.
+  grep -aqiE -e "$VENDOR|$TEXTPAT" -- "$f" 2>/dev/null || rc=$?
+  if [ "$rc" -eq 1 ]; then return 0; fi
+  [ "$rc" -eq 0 ] || return 2
+  rc=0
+  a="$(grep -IEin -e "$TEXTPAT" -- "$f" 2>/dev/null | cut -d: -f1)" || rc=$?
   [ "$rc" -le 1 ] || return 2
   rc=0
   b="$(grep -aEn -e "$VENDOR" -- "$f" 2>/dev/null | cut -d: -f1)" || rc=$?
@@ -232,14 +248,56 @@ scan_files() {
   done
 }
 
-# index_scan: scans staged blobs (not the working tree). Same records as scan_files.
+# index_same <idx-file>: writes $TMPD/same = ascending record numbers (1-based, in index order) of
+# regular index entries whose blob is byte-identical to the working-tree file (so scan_files has
+# already scanned exactly that content). ONE `git hash-object --no-filters --stdin-paths` for all.
+# Only ordinary files are hashed: never a .env* path, a protected .env.example, any .env.example,
+# a symlink, a file that is not readable, or a path containing a newline. Any doubt -> no skip.
+index_same() {
+  local rec meta path mode sha stage n=0 hn=0
+  : >"$TMPD/same"
+  : >"$TMPD/hp"
+  : >"$TMPD/hi"
+  while IFS= read -r -d '' rec; do
+    n=$((n + 1))
+    meta="${rec%%$'\t'*}"
+    path="${rec#*$'\t'}"
+    read -r mode sha stage <<<"$meta"
+    case "$mode" in 100644 | 100755) ;; *) continue ;; esac
+    [ "$stage" = 0 ] || continue
+    case "$path" in *$'\n'*) continue ;; esac
+    if is_env_path "$path" || is_example "$path" || is_prot "$path"; then continue; fi
+    if [ -f "$path" ] && [ ! -L "$path" ] && [ -r "$path" ]; then
+      hn=$((hn + 1))
+      printf '%s\n' "$path" >>"$TMPD/hp"
+      printf '%s\t%s\n' "$n" "$sha" >>"$TMPD/hi"
+    fi
+  done <"$1"
+  [ "$hn" -gt 0 ] || return 0
+  if git hash-object --no-filters --stdin-paths <"$TMPD/hp" >"$TMPD/hout" 2>/dev/null &&
+    [ "$(wc -l <"$TMPD/hout")" -eq "$hn" ]; then
+    awk -F'\t' 'NR == FNR { h[NR] = $1; next } h[FNR] == $2 { print $1 }' \
+      "$TMPD/hout" "$TMPD/hi" >"$TMPD/same"
+  fi
+}
+
+# index_scan: scans staged blobs (not the working tree). Same records as scan_files. Blobs equal
+# to their working-tree file are skipped (index_same); the others are read blob by blob.
 index_scan() {
-  local rec meta path mode sha stage t lines ex blob="$TMPD/blob"
+  local rec meta path mode sha stage t lines ex blob="$TMPD/blob" n=0 nxt=0
   if ! git ls-files -s -z >"$TMPD/idx" 2>"$TMPD/idx.err" || [ -s "$TMPD/idx.err" ]; then
     echo "D|index"
     return 0
   fi
+  index_same "$TMPD/idx"
+  exec 4<"$TMPD/same"
+  read -r nxt <&4 || nxt=0
   while IFS= read -r -d '' rec; do
+    n=$((n + 1))
+    if [ "$n" = "$nxt" ]; then
+      read -r nxt <&4 || nxt=0
+      continue
+    fi
     meta="${rec%%$'\t'*}"
     path="${rec#*$'\t'}"
     read -r mode sha stage <<<"$meta"
@@ -260,6 +318,7 @@ index_scan() {
     emit_hits "$path" "$lines"
     if [ "$ex" = 1 ]; then example_check "$path" "$blob" || echo "E|$(rp "$path")"; fi
   done <"$TMPD/idx"
+  exec 4<&-
 }
 
 # name_hits <NUL-file>: N records for list entries whose NAME matches a vendor pattern.
@@ -271,7 +330,8 @@ name_hits() {
 
 # msg_hits <C|G> <file>: ids of records (header line \001<id>) that contain a vendor match.
 msg_hits() {
-  { grep -aEn -e "^$HDR[0-9a-f]{40,64}\$|$PATTERN" "$2" || true; } |
+  { { grep -aEn -e "^$HDR[0-9a-f]{40,64}\$|$VENDOR" "$2" || true; }
+    { grep -aEin -e "$TEXTPAT" "$2" || true; }; } | sort -t: -k1,1n -s |
     awk -v t="$1" -v h="$HDR" '
       { sub(/^[0-9]+:/, "") }
       substr($0, 1, 1) == h { c = substr($0, 2, 12); next }

@@ -1046,3 +1046,150 @@ def test_a3_l8_tag_message_generic_pattern(repo: Path) -> None:
     git(repo, "tag", "-a", "v1", "-m", "release " + secret)
     res = run(repo, "--history")
     assert_red(res, "tag message", "a" * 20)
+
+
+# ---------------------------------------------------------------- unit a.3.1
+# R1: the generic pattern (and bearer/url) is case-insensitive; vendor prefixes keep exact case.
+UPPER_GENERIC = {
+    "db_password": lambda: "DB_PASS" + "WORD=" + "hunter2" * 3,
+    "api_key_colon": lambda: "API_" + "KEY: " + "abcdefghijklmnopqrstuv",
+    "mixed_secret": lambda: "My_Sec" + 'ret = "' + "Ab1" * 6 + '"',
+    "upper_token_json": lambda: '{"TO' + 'KEN": "' + "a-b" * 6 + '"}',
+    "upper_bearer": lambda: "AUTHORIZATION" + ": BEARER " + rep("a", 24),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(UPPER_GENERIC))
+def test_a31_r1_upper_case_generic_untracked(repo: Path, kind: str) -> None:
+    secret = UPPER_GENERIC[kind]()
+    (repo / "notes.txt").write_text(f"one\n{secret}\n")
+    assert_red(run(repo), "notes.txt:2", secret)
+
+
+@pytest.mark.parametrize("kind", sorted(UPPER_GENERIC))
+def test_a31_r1_upper_case_generic_index_only(repo: Path, kind: str) -> None:
+    secret = UPPER_GENERIC[kind]()
+    (repo / "leak.txt").write_text(secret + "\n")
+    git(repo, "add", "leak.txt")
+    (repo / "leak.txt").write_text("clean now\n")
+    assert_red(run(repo), "leak.txt:1", secret)
+
+
+@pytest.mark.parametrize("kind", sorted(UPPER_GENERIC))
+def test_a31_r1_upper_case_generic_commit_message(repo: Path, kind: str) -> None:
+    secret = UPPER_GENERIC[kind]()
+    git(repo, "commit", "-q", "--allow-empty", "-m", "oops " + secret)
+    assert_red(run(repo, "--history"), "commit message", secret)
+
+
+def test_a31_r1_upper_case_generic_tag_message(repo: Path) -> None:
+    secret = UPPER_GENERIC["db_password"]()
+    git(repo, "tag", "-a", "v1", "-m", "release " + secret)
+    assert_red(run(repo, "--history"), "tag message", "hunter2")
+
+
+def test_a31_r1_upper_case_generic_path_redacted(repo: Path) -> None:
+    name = "API_" + "KEY=" + "a" * 20 + ".txt"
+    (repo / name).write_text(FAKES["groq"]() + "\n")
+    res = run(repo)
+    assert res.returncode == 1
+    assert "<redacted-path>" in res.stderr
+    assert "a" * 20 not in res.stderr
+
+
+def test_a31_r1_upper_case_generic_in_env_example(repo: Path) -> None:
+    (repo / ENV_EXAMPLE).write_text("# DB_PASS" + "WORD=" + "hunter2" * 3 + "\nDEBUG=1\n")
+    assert_red(run(repo), ENV_EXAMPLE + ":1", "hunter2")
+
+
+def test_a31_r1_upper_case_short_value_still_clean(repo: Path) -> None:
+    (repo / "c.txt").write_text("DB_PASS" + "WORD=short\n")
+    assert run(repo).returncode == 0
+
+
+def test_a31_r1_vendor_prefix_keeps_exact_case(repo: Path) -> None:
+    """Vendor prefixes are case-specific: an upper-cased lookalike is not a vendor key."""
+    (repo / "c.txt").write_text(("GSK_" + rep("x", 24)) + "\n")
+    assert run(repo).returncode == 0
+
+
+# R2: skip blobs equal to the working-tree file, never touch protected paths
+def test_a31_r2_perf_500_files(tmp_path: Path) -> None:
+    import time
+
+    r = tmp_path / "big"
+    r.mkdir()
+    git(r, "init", "-q")
+    for i in range(500):
+        d = r / f"d{i % 20}"
+        d.mkdir(exist_ok=True)
+        (d / f"f{i}.txt").write_text(f"file {i}\nplain content\n" * 5)
+    git(r, "add", "-A")
+    git(r, "commit", "-qm", "big")
+    t0 = time.monotonic()
+    res = run(r)
+    dt = time.monotonic() - t0
+    assert res.returncode == 0, res.stderr
+    assert dt < 8, f"gate took {dt:.1f}s on 500 files"  # target <= 6 s; margin for CI noise
+
+
+def test_a31_r2_blob_equal_to_worktree_hit_reported_once(repo: Path) -> None:
+    secret = FAKES["ghp"]()
+    (repo / "same.txt").write_text("x\n" + secret + "\n")
+    git(repo, "add", "same.txt")
+    res = run(repo)
+    assert_red(res, "same.txt:2", secret)
+    assert res.stderr.count("same.txt:2") == 1
+
+
+def test_a31_r2_staged_differs_from_worktree_still_scanned_among_many(repo: Path) -> None:
+    for i in range(5):
+        (repo / f"ok{i}.txt").write_text(f"fine {i}\n")
+    secret = FAKES["json_password"]()
+    (repo / "mid.json").write_text(secret + "\n")
+    git(repo, "add", "-A")
+    (repo / "mid.json").write_text("{}\n")
+    res = run(repo)
+    assert_red(res, "mid.json:1", secret)
+    assert "ok0.txt" not in res.stderr
+
+
+def test_a31_r2_protected_path_never_hashed_or_read(repo: Path, tmp_path: Path) -> None:
+    """Shim `git`: no hash-object / cat-file call is ever aimed at a .env.local path or its blob."""
+    protected = ".env" + ".local"
+    track(repo, protected, FAKES["groq"]() + "\n")
+    blob = git(repo, "ls-files", "-s", "--", protected).split()[1]
+    log = tmp_path / "calls.log"
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    real_git = shutil.which("git")
+    (shim / "git").write_text(f'#!/bin/bash\necho "git $*" >> "{log}"\nexec "{real_git}" "$@"\n')
+    (shim / "git").chmod(0o755)
+    env = base_env()
+    env["PATH"] = f"{shim}:{env['PATH']}"
+    res = subprocess.run(
+        ["bash", str(SCRIPT)], cwd=repo, env=env, capture_output=True, text=True, check=False
+    )
+    assert res.returncode == 1
+    calls = log.read_text()
+    assert blob not in calls
+    assert protected not in calls.replace("ls-files", "")
+    assert FAKES["groq"]() not in res.stdout + res.stderr
+
+
+# R3: the env-path classification (strings only: an untracked .env.* file cannot be created here)
+def test_a31_r3_env_path_names_classified_path_only() -> None:
+    script = (
+        f'eval "$(sed -n "/^ENV_RE=/p;/^EX_NAME=/p;/^is_env_path()/,/^}}/p" "{SCRIPT}")"; '
+        'for p in .env.local sub/.env.production .env; do is_env_path "$p" && echo "env:$p"; done; '
+        'for p in .envrc sub/.env.example x.env; do is_env_path "$p" || echo "plain:$p"; done'
+    )
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+    assert out.split() == [
+        "env:.env.local",
+        "env:sub/.env.production",
+        "env:.env",
+        "plain:.envrc",
+        "plain:sub/.env.example",
+        "plain:x.env",
+    ]
