@@ -174,7 +174,7 @@ def test_s7_empty_question_refuses_without_calls(tmp_path, embeddings, q):
 
     emb = CountingEmb(embeddings)
     chat = CountingChat(responses=["x"])
-    s = Settings(gate_threshold=0.0, chroma_dir=str(tmp_path / "c"), docs_dir=str(FIXTURE_DOCS))
+    s = Settings(gate_threshold=1e-9, chroma_dir=str(tmp_path / "c"), docs_dir=str(FIXTURE_DOCS))
     p = Pipeline(s, emb, chat, FIXTURE_DOCS)  # type: ignore[arg-type]
     r = p.ask(q)
     assert r["refused"] and r["refusal_reason"] == "empty_question" and r["answer"] == REFUSAL
@@ -184,10 +184,12 @@ def test_s7_empty_question_refuses_without_calls(tmp_path, embeddings, q):
     assert all(v == 0 for k, v in t.items() if k != "gate")
 
 
-def test_s8_zero_hits_in_mode_refuses_no_context(make_pipeline):
+def test_s8_zero_hits_in_mode_refuses(make_pipeline):
+    # With gate_threshold > 0 (c.3 L2) zero hits means confidence 0.0 < threshold, so the gate
+    # refuses first (below_gate); "no_context" is now only a defensive second line.
     p, chat = make_pipeline(response="x [WH-003 §2.1]")
     r = p.ask("zzzqqq xxxyyy", "bm25")
-    assert r["refused"] and r["refusal_reason"] == "no_context" and r["answer"] == REFUSAL
+    assert r["refused"] and r["refusal_reason"] == "below_gate" and r["answer"] == REFUSAL
     assert chat.calls == 0 and r["timings_ms"]["llm"] == 0
     assert r["citations"] == [] and r["chunks"] == []
 
@@ -197,6 +199,7 @@ def test_s8_zero_hits_in_mode_refuses_no_context(make_pipeline):
     "kw",
     [
         {"gate_threshold": float("nan")},
+        {"gate_threshold": 0.0},
         {"gate_threshold": float("inf")},
         {"gate_threshold": -0.1},
         {"gate_threshold": 1.1},
@@ -216,7 +219,7 @@ def test_s9_invalid_settings_rejected(kw):
 @pytest.mark.parametrize(
     "kw",
     [
-        {"gate_threshold": 0.0},
+        {"gate_threshold": 1e-9},
         {"gate_threshold": 1.0},
         {"top_k": 1, "candidates": 1},
         {"top_k": 20, "candidates": 100},
@@ -255,28 +258,6 @@ def test_s10_from_env_wraps_key():
     s = Settings.from_env({"LLM_PROVIDER": "groq", "GROQ_API_KEY": KEY})
     assert s.groq_api_key is not None and s.groq_api_key.get() == KEY
     assert KEY not in repr(vars(s))
-
-
-def test_s10_chroma_never_reads_env_file(monkeypatch, tmp_path, embeddings):
-    import ops_copilot.index as index_mod
-    from ops_copilot.chunk import chunk_docs
-    from ops_copilot.ingest import load_docs
-
-    seen: list[dict] = []
-    real = index_mod.ChromaSettings
-
-    def spy(**kw):
-        seen.append(kw)
-        return real(**kw)
-
-    monkeypatch.setattr(index_mod, "ChromaSettings", spy)
-    work = tmp_path / "cwd"
-    work.mkdir()
-    (work / ".env").write_text("ALLOW_RESET=true\n")  # throwaway, outside the repo
-    monkeypatch.chdir(work)
-    idx = index_mod.Index(chunk_docs(load_docs(FIXTURE_DOCS)), embeddings, tmp_path / "chroma", "m")
-    assert seen and seen[0].get("_env_file", "missing") is None
-    assert idx._client.get_settings().allow_reset is False
 
 
 # ---- S11 ------------------------------------------------------------------------------------

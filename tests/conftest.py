@@ -54,7 +54,7 @@ def embeddings() -> HashedBowEmbeddings:
 
 @pytest.fixture
 def make_pipeline(tmp_path: Path, embeddings: HashedBowEmbeddings):
-    def _make(response: str = "x", threshold: float = 0.0, **kw) -> tuple[Pipeline, CountingChat]:
+    def _make(response: str = "x", threshold: float = 1e-9, **kw) -> tuple[Pipeline, CountingChat]:
         chat = CountingChat(responses=[response])
         settings = Settings(
             gate_threshold=threshold,

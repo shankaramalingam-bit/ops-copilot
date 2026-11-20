@@ -9,9 +9,9 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from . import gate
-from .answer import REFUSAL, build_messages, finalize
+from .answer import REFUSAL, build_messages, finalize, normalise_text
 from .chunk import chunk_docs
-from .config import Settings
+from .config import MAX_QUESTION_CHARS, Settings
 from .index import Index
 from .ingest import load_docs
 from .llm import get_chat_model, get_embeddings
@@ -63,7 +63,8 @@ class Pipeline:
 
     def ask(self, question: str, mode: str = "hybrid") -> AskResult:
         s = self.settings
-        if not question.strip():
+        too_long = len(question) > MAX_QUESTION_CHARS
+        if too_long or not normalise_text(question).strip():
             t = time.perf_counter()
             decision = gate.check(0.0, s.gate_threshold)
             zero: TimingsOut = {
@@ -74,7 +75,8 @@ class Pipeline:
                 "gate": (time.perf_counter() - t) * 1000.0,
                 "llm": 0.0,
             }
-            return self._refusal("empty_question", decision.confidence, [], zero)
+            reason = "question_too_long" if too_long else "empty_question"
+            return self._refusal(reason, decision.confidence, [], zero)
         r = retrieve(self.index, question, mode, s.top_k, s.rrf_k, s.candidates)
         t = time.perf_counter()
         decision = gate.check(r.confidence, s.gate_threshold)

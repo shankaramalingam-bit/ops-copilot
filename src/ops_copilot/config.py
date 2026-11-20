@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 PROVIDERS = ("ollama", "groq")
+# Hard cap on question length (chars). A constant: not environment-tunable.
+MAX_QUESTION_CHARS = 2000
 
 
 class ConfigError(ValueError):
@@ -59,7 +61,7 @@ class Secret:
         raise TypeError("Secret cannot be pickled")
 
 
-@dataclass
+@dataclass(frozen=True)
 class Settings:
     llm_provider: str = "ollama"
     ollama_model: str = "llama3.1:8b"
@@ -76,19 +78,20 @@ class Settings:
     chroma_dir: str = "data/cache/chroma"
 
     def __post_init__(self) -> None:
-        self.llm_provider = self.llm_provider.strip().lower()
-        if self.llm_provider not in PROVIDERS:
+        provider = self.llm_provider.strip().lower()
+        object.__setattr__(self, "llm_provider", provider)
+        if provider not in PROVIDERS:
             raise ConfigError(f"LLM_PROVIDER must be one of {PROVIDERS}")
         key = self.groq_api_key
         if isinstance(key, str):
             key = Secret(key) if key.strip() else None
         elif isinstance(key, Secret) and not key.get().strip():
             key = None
-        self.groq_api_key = key
+        object.__setattr__(self, "groq_api_key", key)
         if self.llm_provider == "groq" and not self.groq_api_key:
             raise ConfigError("LLM_PROVIDER=groq requires GROQ_API_KEY to be set")
-        if not (math.isfinite(self.gate_threshold) and 0.0 <= self.gate_threshold <= 1.0):
-            raise ConfigError("gate_threshold must be a finite number in [0, 1]")
+        if not (math.isfinite(self.gate_threshold) and 0.0 < self.gate_threshold <= 1.0):
+            raise ConfigError("gate_threshold must be a finite number in (0, 1]")
         if not 1 <= self.top_k <= 20:
             raise ConfigError("top_k must be in 1..20")
         if not self.top_k <= self.candidates <= 100:

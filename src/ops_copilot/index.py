@@ -44,7 +44,10 @@ class Index:
         self.bm25 = BM25Okapi([tokenize(c.text) for c in chunks]) if chunks else None
         path = Path(chroma_dir)
         path.mkdir(parents=True, exist_ok=True)
-        # _env_file=None: Chroma must never implicitly read a .env from the working directory.
+        # _env_file=None: the client Settings we build here does not read a .env file. Caveat:
+        # chromadb itself constructs a module-level Settings() at import time, which may read
+        # ./.env from the working directory; that is outside our control, so run from a
+        # directory without a stray .env.
         chroma_settings = ChromaSettings(
             anonymized_telemetry=False,
             _env_file=None,  # type: ignore[call-arg]
