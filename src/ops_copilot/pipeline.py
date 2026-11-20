@@ -79,7 +79,7 @@ class Pipeline:
             }
             reason = "question_too_long" if too_long else "empty_question"
             return self._refusal(reason, decision.confidence, [], zero)
-        r = retrieve(self.index, question, mode, s.top_k, s.rrf_k, s.candidates)
+        r = retrieve(self.index, norm, mode, s.top_k, s.rrf_k, s.candidates)
         t = time.perf_counter()
         decision = gate.check(r.confidence, s.gate_threshold)
         gate_ms = (time.perf_counter() - t) * 1000.0
@@ -98,7 +98,7 @@ class Pipeline:
             return self._refusal("no_context", r.confidence, r.hits, timings)
 
         t = time.perf_counter()
-        msg = self.chat_model.invoke(build_messages(question, r.hits))
+        msg = self.chat_model.invoke(build_messages(norm, r.hits))
         timings["llm"] = (time.perf_counter() - t) * 1000.0
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         f = finalize(content, r.hits)

@@ -233,18 +233,18 @@ def test_l4_settings_frozen():
 
 
 def test_l4_chat_model_has_timeout_and_retries_groq():
-    from ops_copilot.llm import LLM_MAX_RETRIES, LLM_TIMEOUT_S, get_chat_model
+    from ops_copilot.llm import GROQ_MAX_RETRIES, GROQ_TIMEOUT_S, get_chat_model
 
     m = get_chat_model(Settings(llm_provider="groq", groq_api_key="fake-test-key-4"))
-    assert m.request_timeout == LLM_TIMEOUT_S == 60  # type: ignore[attr-defined]
-    assert m.max_retries == LLM_MAX_RETRIES == 1  # type: ignore[attr-defined]
+    assert m.request_timeout == GROQ_TIMEOUT_S == 30  # type: ignore[attr-defined]  # d.1: 60 -> 30
+    assert m.max_retries == GROQ_MAX_RETRIES == 1  # type: ignore[attr-defined]
 
 
 def test_l4_chat_model_has_timeout_ollama():
-    from ops_copilot.llm import LLM_TIMEOUT_S, get_chat_model
+    from ops_copilot.llm import OLLAMA_TIMEOUT_S, get_chat_model
 
     m = get_chat_model(Settings())
-    assert m.client_kwargs.get("timeout") == LLM_TIMEOUT_S  # type: ignore[attr-defined]
+    assert m.client_kwargs.get("timeout") == OLLAMA_TIMEOUT_S  # type: ignore[attr-defined]
 
 
 def test_iii_groq_chat_model_receives_raw_key_offline():

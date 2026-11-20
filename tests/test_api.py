@@ -35,6 +35,15 @@ TIMING_KEYS = {"embed", "bm25", "dense", "rrf", "gate", "llm"}
 CHUNK_KEYS = {"id", "text", "bm25_rank", "dense_rank", "rrf", "used"}
 
 
+@pytest.fixture(autouse=True)
+def _allow_testserver_host(monkeypatch):
+    """d.1: Host is allow-listed; TestClient's default host is 'testserver' (change 1)."""
+    monkeypatch.setenv("OPS_COPILOT_ALLOWED_HOSTS", "testserver")
+
+
+JSON_CT = {"content-type": "application/json"}
+
+
 @pytest.fixture
 def client(make_pipeline, tmp_path):
     pipe, _ = make_pipeline(GOOD)
@@ -157,20 +166,20 @@ def test_boundary_lengths_accepted(client):
 
 
 def test_non_json_422(client):
-    assert client.post("/api/ask", content=b"not json").status_code == 422
-    r = client.post("/api/ask", content=b"\xff\xfe", headers={"content-type": "application/json"})
+    assert client.post("/api/ask", content=b"not json", headers=JSON_CT).status_code == 422
+    r = client.post("/api/ask", content=b"\xff\xfe", headers=JSON_CT)
     assert r.status_code == 422
-    assert client.post("/api/ask", content=b"").status_code == 422
+    assert client.post("/api/ask", content=b"", headers=JSON_CT).status_code == 422
 
 
 def test_body_cap_413_before_parsing(client):
     big = b'{"question": "' + b"x" * (20 * 1024) + b'"}'
     assert len(big) > MAX_BODY_BYTES
-    assert client.post("/api/ask", content=big).status_code == 413
+    assert client.post("/api/ask", content=big, headers=JSON_CT).status_code == 413
     # not even valid JSON: must be 413 (size checked before parsing), not 422
-    assert client.post("/api/ask", content=b"z" * (20 * 1024)).status_code == 413
+    assert client.post("/api/ask", content=b"z" * (20 * 1024), headers=JSON_CT).status_code == 413
     # chunked (no content-length) is capped too
-    r = client.post("/api/ask", content=iter([b"z" * 9000, b"z" * 9000]))
+    r = client.post("/api/ask", content=iter([b"z" * 9000, b"z" * 9000]), headers=JSON_CT)
     assert r.status_code == 413
 
 
@@ -293,7 +302,7 @@ def test_no_canary_in_any_response_or_log(tmp_path, embeddings, caplog):
         post(c, {"question": Q, "mode": "bm25"}),
         post(c, {"question": ""}),
         post(c, {"question": Q, "top_k": 1}),
-        c.post("/api/ask", content=b"x" * 20000),
+        c.post("/api/ask", content=b"x" * 20000, headers=JSON_CT),
         c.get("/api/docs"),
         c.get("/api/dashboard"),
         c.get("/api/eval/latest"),
