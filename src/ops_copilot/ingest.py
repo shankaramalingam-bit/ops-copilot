@@ -12,8 +12,12 @@ from .types import Doc
 _FRONT = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _TAG = re.compile(r"</?[A-Za-z][^>\n]*>")
-_BANNER = re.compile(r"^.*CONFIDENTIAL\s+—\s+Meridian Supply Co\. internal use only.*$", re.M)
-_FOOTER = re.compile(r"^.*(?:Document control:|Uncontrolled when printed).*$", re.M)
+_BANNER = re.compile(r"^[ \t]*CONFIDENTIAL[ \t]*[—–-][^\n]*$", re.M | re.I)
+_FOOTER = re.compile(
+    r"^[ \t*_>]*Document control:[^\n]*$"
+    r"|^(?=[^\n]*\bPage\s+\d+\s+of\s+\d+\b)(?=[^\n]*Uncontrolled when printed)[^\n]*$",
+    re.M | re.I,
+)
 _LINK = re.compile(r"\[([^\]]+)\]\((?:[^)]*)\)")
 _BOLD = re.compile(r"(\*\*|__)(?=\S)(.+?)(?<=\S)\1")
 _ITAL_STAR = re.compile(r"(?<![\*\w])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![\*\w])")
