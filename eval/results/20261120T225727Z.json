@@ -1,0 +1,1467 @@
+{
+  "run_at": "2026-11-20T22:57:27+00:00",
+  "model": "openai/gpt-oss-120b",
+  "embed_model": "nomic-embed-text",
+  "gate_threshold": 0.61,
+  "metrics": {
+    "faithfulness": 0.8666666666666667,
+    "hit_at_4": 1.0,
+    "mrr": 1.0,
+    "citation_accuracy": 0.9090909090909091,
+    "refusal_correct": 2,
+    "refusal_total": 2,
+    "false_refusals": 2,
+    "answer_rate": 0.8461538461538461,
+    "p95_latency_ms": 1790.5
+  },
+  "pass_bars": {
+    "faithfulness": 0.9,
+    "hit_at_4": 0.85,
+    "mrr": 0.7,
+    "refusal_correct": 2,
+    "p95_latency_ms": 8000
+  },
+  "questions": [
+    {
+      "id": "Q1",
+      "type": "direct",
+      "question": "How often are A-class items cycle counted?",
+      "expected_docs": [
+        "WH-002"
+      ],
+      "retrieved_docs": [
+        "WH-002",
+        "WH-002",
+        "WH-002",
+        "WH-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-002",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1599.2,
+      "answer": "A-class items are cycle counted monthly, which equals twelve counts per year. [WH-002 \u00a72.2]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-002 \u00a72.2"
+      ],
+      "expected_answer_points": [
+        "A items are counted monthly (twelve times a year)"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.7379115223884583,
+      "chunk_ids": [
+        "WH-002#2.2#0",
+        "WH-002#2.1#0",
+        "WH-002#3.3#0",
+        "WH-002#1.1#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-002#2.2#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "WH-002#2.1#0",
+          "bm25_rank": 4,
+          "dense_rank": 2,
+          "rrf": 0.031754032258064516,
+          "used": false
+        },
+        {
+          "id": "WH-002#3.3#0",
+          "bm25_rank": 2,
+          "dense_rank": 5,
+          "rrf": 0.0315136476426799,
+          "used": false
+        },
+        {
+          "id": "WH-002#1.1#0",
+          "bm25_rank": 3,
+          "dense_rank": 7,
+          "rrf": 0.030798389007344232,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 800.9734991937876,
+        "bm25": 0.6523346528410912,
+        "dense": 21.127082407474518,
+        "rrf": 0.06312504410743713,
+        "gate": 0.015417113900184631,
+        "llm": 774.3549169972539
+      },
+      "judge": [
+        {
+          "claim": "A-class items are cycle counted monthly, which equals twelve counts per year. [WH-002 \u00a72.2]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-002#2.2#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q2",
+      "type": "direct",
+      "question": "How soon after receipt must goods be put away?",
+      "expected_docs": [
+        "WH-001"
+      ],
+      "retrieved_docs": [
+        "WH-001",
+        "WH-001",
+        "WH-003",
+        "WH-003"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-001",
+          "section": "5.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 854.5,
+      "answer": "Goods must be put away within four hours of receipt. [WH-001 \u00a75.1]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-001 \u00a75.1"
+      ],
+      "expected_answer_points": [
+        "Within 4 hours of receipt"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.797458827495575,
+      "chunk_ids": [
+        "WH-001#5.1#0",
+        "WH-001#1.1#0",
+        "WH-003#5.1#0",
+        "WH-003#7.3#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-001#5.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "WH-001#1.1#0",
+          "bm25_rank": 2,
+          "dense_rank": 3,
+          "rrf": 0.03200204813108039,
+          "used": false
+        },
+        {
+          "id": "WH-003#5.1#0",
+          "bm25_rank": 4,
+          "dense_rank": 4,
+          "rrf": 0.03125,
+          "used": false
+        },
+        {
+          "id": "WH-003#7.3#0",
+          "bm25_rank": 3,
+          "dense_rank": 10,
+          "rrf": 0.030158730158730156,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 64.8152083158493,
+        "bm25": 1.0687913745641708,
+        "dense": 3.9898334071040154,
+        "rrf": 0.05320832133293152,
+        "gate": 0.04087481647729874,
+        "llm": 783.8650830090046
+      },
+      "judge": [
+        {
+          "claim": "Goods must be put away within four hours of receipt. [WH-001 \u00a75.1]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-001#5.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q3",
+      "type": "direct",
+      "question": "How long is an RMA number valid?",
+      "expected_docs": [
+        "WH-004"
+      ],
+      "retrieved_docs": [
+        "WH-004",
+        "WH-004",
+        "WH-004",
+        "CS-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-004",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 641.4,
+      "answer": "An RMA number is valid for 30 days from the date of issue. [WH-004 \u00a72.2]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-004 \u00a72.2"
+      ],
+      "expected_answer_points": [
+        "30 days from the date of issue"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.790678083896637,
+      "chunk_ids": [
+        "WH-004#2.2#0",
+        "WH-004#2.3#0",
+        "WH-004#2.1#0",
+        "CS-001#4.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-004#2.2#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "WH-004#2.3#0",
+          "bm25_rank": 3,
+          "dense_rank": 2,
+          "rrf": 0.03200204813108039,
+          "used": false
+        },
+        {
+          "id": "WH-004#2.1#0",
+          "bm25_rank": 2,
+          "dense_rank": 3,
+          "rrf": 0.03200204813108039,
+          "used": false
+        },
+        {
+          "id": "CS-001#4.2#0",
+          "bm25_rank": 8,
+          "dense_rank": 5,
+          "rrf": 0.030090497737556562,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 38.132875226438046,
+        "bm25": 0.36950036883354187,
+        "dense": 1.4279168099164963,
+        "rrf": 0.021290965378284454,
+        "gate": 0.0035837292671203613,
+        "llm": 601.1865008622408
+      },
+      "judge": [
+        {
+          "claim": "An RMA number is valid for 30 days from the date of issue. [WH-004 \u00a72.2]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-004#2.2#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q4",
+      "type": "direct",
+      "question": "What liability insurance must a new supplier carry?",
+      "expected_docs": [
+        "PR-002"
+      ],
+      "retrieved_docs": [
+        "PR-002",
+        "PR-002",
+        "PR-002",
+        "PR-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "PR-002",
+          "section": "2.2",
+          "valid": true
+        },
+        {
+          "doc_id": "PR-002",
+          "section": "2.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 971.3,
+      "answer": "A new supplier must provide a certificate of general liability insurance that covers at least $2 million per occurrence. [PR-002 \u00a72.2] [PR-002 \u00a72.1]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "PR-002 \u00a72.1",
+        "PR-002 \u00a72.2"
+      ],
+      "expected_answer_points": [
+        "General liability cover of at least $2M per occurrence"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.6821388602256775,
+      "chunk_ids": [
+        "PR-002#2.2#0",
+        "PR-002#2.1#0",
+        "PR-002#1.2#0",
+        "PR-002#4.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "PR-002#2.2#0",
+          "bm25_rank": 3,
+          "dense_rank": 2,
+          "rrf": 0.03200204813108039,
+          "used": true
+        },
+        {
+          "id": "PR-002#2.1#0",
+          "bm25_rank": 2,
+          "dense_rank": 5,
+          "rrf": 0.0315136476426799,
+          "used": true
+        },
+        {
+          "id": "PR-002#1.2#0",
+          "bm25_rank": 9,
+          "dense_rank": 1,
+          "rrf": 0.030886196246139225,
+          "used": false
+        },
+        {
+          "id": "PR-002#4.2#0",
+          "bm25_rank": 5,
+          "dense_rank": 7,
+          "rrf": 0.030309988518943745,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 44.82291638851166,
+        "bm25": 1.0117916390299797,
+        "dense": 3.084249794483185,
+        "rrf": 0.03216695040464401,
+        "gate": 0.0360831618309021,
+        "llm": 921.6718748211861
+      },
+      "judge": [
+        {
+          "claim": "A new supplier must provide a certificate of general liability insurance that covers at least $2 million per occurrence. [PR-002 \u00a72.2] [PR-002 \u00a72.1]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "PR-002#2.2#0",
+            "PR-002#2.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q5",
+      "type": "direct",
+      "question": "How long does a supplier have to respond to a SCAR?",
+      "expected_docs": [
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "QA-001",
+        "QA-001",
+        "PR-002",
+        "QA-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "QA-001",
+          "section": "3.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 784.7,
+      "answer": "The supplier must respond within ten business days. [QA-001 \u00a73.1]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "QA-001 \u00a73.1"
+      ],
+      "expected_answer_points": [
+        "10 business days"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.806821882724762,
+      "chunk_ids": [
+        "QA-001#3.1#0",
+        "QA-001#3.2#0",
+        "PR-002#3.3#0",
+        "QA-001#5.5#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "QA-001#3.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "QA-001#3.2#0",
+          "bm25_rank": 7,
+          "dense_rank": 2,
+          "rrf": 0.031054405392392875,
+          "used": false
+        },
+        {
+          "id": "PR-002#3.3#0",
+          "bm25_rank": 5,
+          "dense_rank": 4,
+          "rrf": 0.031009615384615385,
+          "used": false
+        },
+        {
+          "id": "QA-001#5.5#0",
+          "bm25_rank": 10,
+          "dense_rank": 3,
+          "rrf": 0.030158730158730156,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 33.67841709405184,
+        "bm25": 0.9064581245183945,
+        "dense": 2.0438339561223984,
+        "rrf": 0.030416063964366913,
+        "gate": 0.009083189070224762,
+        "llm": 747.7121660485864
+      },
+      "judge": [
+        {
+          "claim": "The supplier must respond within ten business days. [QA-001 \u00a73.1]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "QA-001#3.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q6",
+      "type": "direct",
+      "question": "What price variance is allowed in 3-way match?",
+      "expected_docs": [
+        "FIN-001"
+      ],
+      "retrieved_docs": [
+        "FIN-001",
+        "FIN-001",
+        "FIN-001",
+        "FIN-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "FIN-001",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1005.0,
+      "answer": "The invoiced unit price may differ from the purchase-order price by up to plus or minus two percent or fifty dollars, whichever is lower, and this tolerance applies to the invoice line total. [FIN-001 \u00a72.2]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "FIN-001 \u00a72.2"
+      ],
+      "expected_answer_points": [
+        "Within 2% or $50, whichever is lower"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.7890863418579102,
+      "chunk_ids": [
+        "FIN-001#2.2#0",
+        "FIN-001#5.1#0",
+        "FIN-001#4.2#0",
+        "FIN-001#5.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "FIN-001#2.2#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "FIN-001#5.1#0",
+          "bm25_rank": 8,
+          "dense_rank": 3,
+          "rrf": 0.03057889822595705,
+          "used": false
+        },
+        {
+          "id": "FIN-001#4.2#0",
+          "bm25_rank": 3,
+          "dense_rank": 8,
+          "rrf": 0.03057889822595705,
+          "used": false
+        },
+        {
+          "id": "FIN-001#5.2#0",
+          "bm25_rank": 6,
+          "dense_rank": 5,
+          "rrf": 0.030536130536130537,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 64.69012517482042,
+        "bm25": 1.133832149207592,
+        "dense": 3.7929592654109,
+        "rrf": 0.0350000336766243,
+        "gate": 0.04141591489315033,
+        "llm": 934.4859579578042
+      },
+      "judge": [
+        {
+          "claim": "The invoiced unit price may differ from the purchase-order price by up to plus or minus two percent or fifty dollars, whichever is lower, and this tolerance applies to the invoice line total. [FIN-001 \u00a72.2]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "FIN-001#2.2#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q7",
+      "type": "direct",
+      "question": "Who approves a $3,000 inventory write-off?",
+      "expected_docs": [
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "WH-005",
+        "WH-005",
+        "WH-005",
+        "WH-005"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-005",
+          "section": "2.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1121.6,
+      "answer": "The Inventory Control Manager approves a $3,000 inventory write-off. [WH-005 \u00a72.1]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-005 \u00a72.1"
+      ],
+      "expected_answer_points": [
+        "Inventory Control Manager ($500 to $5,000 band)"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.7355861067771912,
+      "chunk_ids": [
+        "WH-005#1.1#0",
+        "WH-005#2.1#0",
+        "WH-005#2.2#0",
+        "WH-005#4.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-005#1.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": false
+        },
+        {
+          "id": "WH-005#2.1#0",
+          "bm25_rank": 4,
+          "dense_rank": 3,
+          "rrf": 0.03149801587301587,
+          "used": true
+        },
+        {
+          "id": "WH-005#2.2#0",
+          "bm25_rank": 7,
+          "dense_rank": 2,
+          "rrf": 0.031054405392392875,
+          "used": false
+        },
+        {
+          "id": "WH-005#4.2#0",
+          "bm25_rank": 2,
+          "dense_rank": 7,
+          "rrf": 0.031054405392392875,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 42.50395856797695,
+        "bm25": 0.7274588569998741,
+        "dense": 2.2060414776206017,
+        "rrf": 0.02899952232837677,
+        "gate": 0.01491699367761612,
+        "llm": 1075.7457092404366
+      },
+      "judge": [
+        {
+          "claim": "The Inventory Control Manager approves a $3,000 inventory write-off. [WH-005 \u00a72.1]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-005#2.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q8",
+      "type": "direct",
+      "question": "What's the same-day ship cut-off for key accounts?",
+      "expected_docs": [
+        "CS-001"
+      ],
+      "retrieved_docs": [
+        "CS-001",
+        "CS-001",
+        "CS-001",
+        "CS-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "CS-001",
+          "section": "3.1",
+          "valid": true
+        },
+        {
+          "doc_id": "CS-001",
+          "section": "4.3",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1114.1,
+      "answer": "The same-day shipping cut-off for key accounts is 3 pm local time on a working day. [CS-001 \u00a73.1] [CS-001 \u00a74.3]",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "CS-001 \u00a73.1"
+      ],
+      "expected_answer_points": [
+        "3 pm local time on a working day"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.7767649292945862,
+      "chunk_ids": [
+        "CS-001#3.1#0",
+        "CS-001#4.3#0",
+        "CS-001#5.5#0",
+        "CS-001#5.3#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "CS-001#3.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 1,
+          "rrf": 0.03278688524590164,
+          "used": true
+        },
+        {
+          "id": "CS-001#4.3#0",
+          "bm25_rank": 2,
+          "dense_rank": 2,
+          "rrf": 0.03225806451612903,
+          "used": true
+        },
+        {
+          "id": "CS-001#5.5#0",
+          "bm25_rank": 3,
+          "dense_rank": 3,
+          "rrf": 0.031746031746031744,
+          "used": false
+        },
+        {
+          "id": "CS-001#5.3#0",
+          "bm25_rank": 10,
+          "dense_rank": 4,
+          "rrf": 0.029910714285714284,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 41.15954227745533,
+        "bm25": 1.147957518696785,
+        "dense": 3.0379174277186394,
+        "rrf": 0.03120768815279007,
+        "gate": 0.03383401781320572,
+        "llm": 1067.8490828722715
+      },
+      "judge": [
+        {
+          "claim": "The same-day shipping cut-off for key accounts is 3 pm local time on a working day. [CS-001 \u00a73.1] [CS-001 \u00a74.3]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "CS-001#3.1#0",
+            "CS-001#4.3#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q9",
+      "type": "multi",
+      "question": "A supplier delivery arrives with damaged units. What steps and reports are required?",
+      "expected_docs": [
+        "WH-003",
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "WH-003",
+        "WH-003",
+        "WH-001",
+        "PR-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-001",
+          "section": "4.2",
+          "valid": true
+        },
+        {
+          "doc_id": "WH-003",
+          "section": "1.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.5,
+      "latency_ms": 1774.3,
+      "answer": "When damaged units are found on a delivery, the dock team must:\n\n* Record the damage on the bill of lading.  \n* Take a photograph of the damaged units or packaging as evidence.  \n* Follow the procedures set out in the Short/Over/Damaged (OS&D) policy to preserve Meridian's right to recover costs from the carrier or supplier.  \n\nThese actions are required by the inspection step for outer-carton damage and by the OS&D policy's objective.  \n\n[WH-001 \u00a74.2] [WH-003 \u00a71.1]",
+      "passed": false,
+      "notes": "citation not within expected docs; unfaithful claim(s); not all expected docs cited; not all expected docs in top-4",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-003 \u00a72.1",
+        "WH-003 \u00a72.2",
+        "WH-003 \u00a72.3",
+        "WH-003 \u00a75.1",
+        "WH-003 \u00a75.2",
+        "QA-001 \u00a72.1",
+        "QA-001 \u00a73.1"
+      ],
+      "expected_answer_points": [
+        "Note the exception on the bill of lading before signing and photograph the damage",
+        "Notify Procurement within 24 hours",
+        "Quarantine the damaged goods in the OS&D lane",
+        "An NCR is raised within 1 business day (QA-001)"
+      ],
+      "coverage_at_4": false,
+      "confidence": 0.7180622816085815,
+      "chunk_ids": [
+        "WH-003#1.2#0",
+        "WH-003#1.1#0",
+        "WH-001#4.2#0",
+        "PR-002#3.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-003#1.2#0",
+          "bm25_rank": 3,
+          "dense_rank": 4,
+          "rrf": 0.03149801587301587,
+          "used": false
+        },
+        {
+          "id": "WH-003#1.1#0",
+          "bm25_rank": 2,
+          "dense_rank": 10,
+          "rrf": 0.0304147465437788,
+          "used": true
+        },
+        {
+          "id": "WH-001#4.2#0",
+          "bm25_rank": null,
+          "dense_rank": 1,
+          "rrf": 0.01639344262295082,
+          "used": true
+        },
+        {
+          "id": "PR-002#3.2#0",
+          "bm25_rank": 1,
+          "dense_rank": null,
+          "rrf": 0.01639344262295082,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 50.797791220247746,
+        "bm25": 0.9292494505643845,
+        "dense": 2.149750478565693,
+        "rrf": 0.027334317564964294,
+        "gate": 0.017624348402023315,
+        "llm": 1719.5592923089862
+      },
+      "judge": [
+        {
+          "claim": "Record the damage on the bill of lading.",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-003#1.1#0",
+            "WH-001#4.2#0"
+          ]
+        },
+        {
+          "claim": "Take a photograph of the damaged units or packaging as evidence.",
+          "supported": false,
+          "judge_raw": "NO",
+          "chunks": [
+            "WH-003#1.1#0",
+            "WH-001#4.2#0"
+          ]
+        },
+        {
+          "claim": "Follow the procedures set out in the Short/Over/Damaged (OS&D) policy to preserve Meridian's right to recover costs from the carrier or supplier.",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-003#1.1#0",
+            "WH-001#4.2#0"
+          ]
+        },
+        {
+          "claim": "These actions are required by the inspection step for outer-carton damage and by the OS&D policy's objective.",
+          "supported": false,
+          "judge_raw": "NO",
+          "chunks": [
+            "WH-003#1.1#0",
+            "WH-001#4.2#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q10",
+      "type": "multi",
+      "question": "A cycle count shows a $7,000 shortage. What are the recount rules and who approves the adjustment?",
+      "expected_docs": [
+        "WH-002",
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "WH-002",
+        "WH-002",
+        "WH-002",
+        "WH-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": true,
+      "refusal_reason": "invalid_citation",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 1667.1,
+      "answer": "I couldn't find this in Meridian's documents.",
+      "passed": false,
+      "notes": "false refusal: invalid_citation; not all expected docs in top-4",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-002 \u00a74.1",
+        "WH-002 \u00a74.2",
+        "WH-002 \u00a74.3",
+        "WH-005 \u00a72.1",
+        "WH-005 \u00a72.2"
+      ],
+      "expected_answer_points": [
+        "Variance outside 2% or $250 triggers a recount by a different counter",
+        "If the two counts disagree the Inventory Control Manager supervises a third count",
+        "Above $5,000 needs the Director of Operations plus Finance"
+      ],
+      "coverage_at_4": false,
+      "confidence": 0.7443516850471497,
+      "chunk_ids": [
+        "WH-002#4.2#0",
+        "WH-002#4.1#0",
+        "WH-002#3.1#0",
+        "WH-002#4.3#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "WH-002#4.2#0",
+          "bm25_rank": 2,
+          "dense_rank": 1,
+          "rrf": 0.03252247488101534,
+          "used": false
+        },
+        {
+          "id": "WH-002#4.1#0",
+          "bm25_rank": 6,
+          "dense_rank": 2,
+          "rrf": 0.03128054740957967,
+          "used": false
+        },
+        {
+          "id": "WH-002#3.1#0",
+          "bm25_rank": 10,
+          "dense_rank": 7,
+          "rrf": 0.029211087420042643,
+          "used": false
+        },
+        {
+          "id": "WH-002#4.3#0",
+          "bm25_rank": 9,
+          "dense_rank": 9,
+          "rrf": 0.028985507246376812,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 77.15762499719858,
+        "bm25": 5.743708461523056,
+        "dense": 4.003916867077351,
+        "rrf": 0.045833177864551544,
+        "gate": 0.04624947905540466,
+        "llm": 1578.819583170116
+      },
+      "judge": []
+    },
+    {
+      "id": "Q11",
+      "type": "multi",
+      "question": "The invoice on a $30,000 PO is 5% over the PO price. What happens, and who approves a PO change?",
+      "expected_docs": [
+        "FIN-001",
+        "PR-001"
+      ],
+      "retrieved_docs": [
+        "PR-001",
+        "PR-001",
+        "FIN-001",
+        "PR-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": true,
+      "refusal_reason": "no_valid_citations",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 1790.5,
+      "answer": "I couldn't find this in Meridian's documents.",
+      "passed": false,
+      "notes": "false refusal: no_valid_citations",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "FIN-001 \u00a72.2",
+        "FIN-001 \u00a73.1",
+        "PR-001 \u00a72.1",
+        "PR-001 \u00a74.1"
+      ],
+      "expected_answer_points": [
+        "5% is outside the price tolerance (2% or $50, whichever is lower), so it is an exception",
+        "The invoice is held and routed to the buyer",
+        "A PO change is approved under PR-001 at the band of the new total (Director of Operations for $25,000 to $100,000)"
+      ],
+      "coverage_at_4": true,
+      "confidence": 0.7502891421318054,
+      "chunk_ids": [
+        "PR-001#2.1#0",
+        "PR-001#4.1#0",
+        "FIN-001#3.1#0",
+        "PR-001#5.3#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "PR-001#2.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 2,
+          "rrf": 0.03252247488101534,
+          "used": false
+        },
+        {
+          "id": "PR-001#4.1#0",
+          "bm25_rank": 5,
+          "dense_rank": 1,
+          "rrf": 0.03177805800756621,
+          "used": false
+        },
+        {
+          "id": "FIN-001#3.1#0",
+          "bm25_rank": 3,
+          "dense_rank": 5,
+          "rrf": 0.03125763125763126,
+          "used": false
+        },
+        {
+          "id": "PR-001#5.3#0",
+          "bm25_rank": 6,
+          "dense_rank": 3,
+          "rrf": 0.031024531024531024,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 63.37516661733389,
+        "bm25": 1.5680836513638496,
+        "dense": 3.5350825637578964,
+        "rrf": 0.030541792511940002,
+        "gate": 0.06570853292942047,
+        "llm": 1720.4502085223794
+      },
+      "judge": []
+    },
+    {
+      "id": "Q12",
+      "type": "ambiguous",
+      "question": "What's the approval limit?",
+      "expected_docs": [
+        "PR-001",
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "PR-001",
+        "WH-005",
+        "PR-001",
+        "WH-005"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-005",
+          "section": "2.2",
+          "valid": true
+        },
+        {
+          "doc_id": "PR-001",
+          "section": "1.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1485.2,
+      "answer": "If you mean inventory adjustments, any adjustment above $5,000 requires the approval of both the Director of Operations and a member of the Finance team [WH-005 \u00a72.2].\n\nIf you mean purchase orders, the PO Approval Matrix establishes approval limits based on the value and risk of the spend, but the specific monetary thresholds are not detailed in the excerpts provided [PR-001 \u00a71.1].",
+      "passed": true,
+      "notes": "ok",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "PR-001 \u00a72.1",
+        "WH-005 \u00a72.1"
+      ],
+      "expected_answer_points": [
+        "Labelled readings: If you mean PO approval, the PR-001 bands",
+        "If you mean inventory adjustment approval, the WH-005 bands"
+      ],
+      "coverage_at_4": true,
+      "confidence": 0.6825935244560242,
+      "chunk_ids": [
+        "PR-001#5.1#0",
+        "WH-005#2.2#0",
+        "PR-001#1.1#0",
+        "WH-005#4.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "PR-001#5.1#0",
+          "bm25_rank": 1,
+          "dense_rank": 6,
+          "rrf": 0.031544957774465976,
+          "used": false
+        },
+        {
+          "id": "WH-005#2.2#0",
+          "bm25_rank": 10,
+          "dense_rank": 8,
+          "rrf": 0.028991596638655463,
+          "used": true
+        },
+        {
+          "id": "PR-001#1.1#0",
+          "bm25_rank": null,
+          "dense_rank": 1,
+          "rrf": 0.01639344262295082,
+          "used": true
+        },
+        {
+          "id": "WH-005#4.2#0",
+          "bm25_rank": null,
+          "dense_rank": 2,
+          "rrf": 0.016129032258064516,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 73.49249999970198,
+        "bm25": 3.3769579604268074,
+        "dense": 3.420000895857811,
+        "rrf": 0.03629177808761597,
+        "gate": 0.06145890802145004,
+        "llm": 1403.6880834028125
+      },
+      "judge": [
+        {
+          "claim": "If you mean inventory adjustments, any adjustment above $5,000 requires the approval of both the Director of Operations and a member of the Finance team [WH-005 \u00a72.2].",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "WH-005#2.2#0"
+          ]
+        },
+        {
+          "claim": "If you mean purchase orders, the PO Approval Matrix establishes approval limits based on the value and risk of the spend, but the specific monetary thresholds are not detailed in the excerpts provided [PR-001 \u00a71.1].",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "PR-001#1.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q13",
+      "type": "ambiguous",
+      "question": "How long do I have to report a problem?",
+      "expected_docs": [
+        "WH-003",
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "QA-001",
+        "PR-001",
+        "WH-004",
+        "QA-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "QA-001",
+          "section": "2.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 1078.6,
+      "answer": "You must raise the non-conformance report within one business day of discovering the problem. [QA-001 \u00a72.1]",
+      "passed": false,
+      "notes": "not all expected docs cited; no labelled readings; not all expected docs in top-4",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [
+        "WH-003 \u00a72.3",
+        "QA-001 \u00a72.1"
+      ],
+      "expected_answer_points": [
+        "Labelled readings: Procurement within 24 hours of receipt for OS&D exceptions (WH-003)",
+        "An NCR within 1 business day of finding the nonconformance (QA-001)"
+      ],
+      "coverage_at_4": false,
+      "confidence": 0.6626312136650085,
+      "chunk_ids": [
+        "QA-001#2.1#0",
+        "PR-001#4.2#0",
+        "WH-004#2.2#0",
+        "QA-001#1.2#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "QA-001#2.1#0",
+          "bm25_rank": null,
+          "dense_rank": 1,
+          "rrf": 0.01639344262295082,
+          "used": true
+        },
+        {
+          "id": "PR-001#4.2#0",
+          "bm25_rank": 1,
+          "dense_rank": null,
+          "rrf": 0.01639344262295082,
+          "used": false
+        },
+        {
+          "id": "WH-004#2.2#0",
+          "bm25_rank": null,
+          "dense_rank": 2,
+          "rrf": 0.016129032258064516,
+          "used": false
+        },
+        {
+          "id": "QA-001#1.2#0",
+          "bm25_rank": 2,
+          "dense_rank": null,
+          "rrf": 0.016129032258064516,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 72.40208424627781,
+        "bm25": 1.937583088874817,
+        "dense": 3.6867912858724594,
+        "rrf": 0.03883335739374161,
+        "gate": 0.036708079278469086,
+        "llm": 997.6595416665077
+      },
+      "judge": [
+        {
+          "claim": "You must raise the non-conformance report within one business day of discovering the problem. [QA-001 \u00a72.1]",
+          "supported": true,
+          "judge_raw": "YES",
+          "chunks": [
+            "QA-001#2.1#0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Q14",
+      "type": "unanswerable",
+      "question": "How often must forklift operators be recertified?",
+      "expected_docs": [],
+      "retrieved_docs": [
+        "PR-002",
+        "QA-001",
+        "QA-001",
+        "PR-002"
+      ],
+      "hit": null,
+      "rr": null,
+      "refused": true,
+      "refusal_reason": "below_gate",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 54.8,
+      "answer": "I couldn't find this in Meridian's documents.",
+      "passed": true,
+      "notes": "correctly refused (below_gate)",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [],
+      "expected_answer_points": [
+        "Refuse: not covered by the corpus"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.547502875328064,
+      "chunk_ids": [
+        "PR-002#3.1#0",
+        "QA-001#1.1#0",
+        "QA-001#2.3#0",
+        "PR-002#1.1#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "PR-002#3.1#0",
+          "bm25_rank": null,
+          "dense_rank": 1,
+          "rrf": 0.01639344262295082,
+          "used": false
+        },
+        {
+          "id": "QA-001#1.1#0",
+          "bm25_rank": 1,
+          "dense_rank": null,
+          "rrf": 0.01639344262295082,
+          "used": false
+        },
+        {
+          "id": "QA-001#2.3#0",
+          "bm25_rank": null,
+          "dense_rank": 2,
+          "rrf": 0.016129032258064516,
+          "used": false
+        },
+        {
+          "id": "PR-002#1.1#0",
+          "bm25_rank": 2,
+          "dense_rank": null,
+          "rrf": 0.016129032258064516,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 50.88833346962929,
+        "bm25": 0.8981665596365929,
+        "dense": 2.869708463549614,
+        "rrf": 0.03591645509004593,
+        "gate": 0.008375383913516998,
+        "llm": 0.0
+      },
+      "judge": []
+    },
+    {
+      "id": "Q15",
+      "type": "unanswerable",
+      "question": "What's the current price of SKU 4471 from Granite Fasteners?",
+      "expected_docs": [],
+      "retrieved_docs": [
+        "FIN-001",
+        "PR-001",
+        "WH-004",
+        "WH-004"
+      ],
+      "hit": null,
+      "rr": null,
+      "refused": true,
+      "refusal_reason": "below_gate",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 60.9,
+      "answer": "I couldn't find this in Meridian's documents.",
+      "passed": true,
+      "notes": "correctly refused (below_gate)",
+      "rate_limit_retries": 0,
+      "judge_rate_limit_retries": 0,
+      "expected_sections": [],
+      "expected_answer_points": [
+        "Refuse: no price data in the corpus"
+      ],
+      "coverage_at_4": null,
+      "confidence": 0.5303474068641663,
+      "chunk_ids": [
+        "FIN-001#2.2#0",
+        "PR-001#3.1#0",
+        "WH-004#6.2#0",
+        "WH-004#5.1#0"
+      ],
+      "chunk_ranks": [
+        {
+          "id": "FIN-001#2.2#0",
+          "bm25_rank": 1,
+          "dense_rank": 5,
+          "rrf": 0.03177805800756621,
+          "used": false
+        },
+        {
+          "id": "PR-001#3.1#0",
+          "bm25_rank": 3,
+          "dense_rank": 4,
+          "rrf": 0.03149801587301587,
+          "used": false
+        },
+        {
+          "id": "WH-004#6.2#0",
+          "bm25_rank": 10,
+          "dense_rank": 8,
+          "rrf": 0.028991596638655463,
+          "used": false
+        },
+        {
+          "id": "WH-004#5.1#0",
+          "bm25_rank": null,
+          "dense_rank": 1,
+          "rrf": 0.01639344262295082,
+          "used": false
+        }
+      ],
+      "timings_ms": {
+        "embed": 57.052125222980976,
+        "bm25": 1.295667141675949,
+        "dense": 2.38233245909214,
+        "rrf": 0.0350000336766243,
+        "gate": 0.009292736649513245,
+        "llm": 0.0
+      },
+      "judge": []
+    }
+  ],
+  "provider": "groq",
+  "generator_model": "openai/gpt-oss-120b",
+  "judge_model": "openai/gpt-oss-120b",
+  "pace_s": 10.0,
+  "kpi_pass": {
+    "faithfulness": false,
+    "hit_at_4": true,
+    "mrr": true,
+    "refusal_correct": true,
+    "p95_latency_ms": true
+  }
+}
