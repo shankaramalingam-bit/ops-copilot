@@ -1,0 +1,469 @@
+{
+  "run_at": "2026-11-20T09:06:01+00:00",
+  "model": "llama3.1:8b",
+  "embed_model": "nomic-embed-text",
+  "gate_threshold": 0.61,
+  "metrics": {
+    "faithfulness": 0.631578947368421,
+    "hit_at_4": 1.0,
+    "mrr": 1.0,
+    "citation_accuracy": 0.9166666666666666,
+    "refusal_correct": 2,
+    "refusal_total": 2,
+    "false_refusals": 1,
+    "answer_rate": 0.9230769230769231,
+    "p95_latency_ms": 15877.0
+  },
+  "pass_bars": {
+    "faithfulness": 0.9,
+    "hit_at_4": 0.85,
+    "mrr": 0.7,
+    "refusal_correct": 2,
+    "p95_latency_ms": 8000
+  },
+  "questions": [
+    {
+      "id": "Q1",
+      "type": "direct",
+      "question": "How often are A-class items cycle counted?",
+      "expected_docs": [
+        "WH-002"
+      ],
+      "retrieved_docs": [
+        "WH-002",
+        "WH-002",
+        "WH-002",
+        "WH-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-002",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 10768.9,
+      "passed": true,
+      "notes": "ok"
+    },
+    {
+      "id": "Q2",
+      "type": "direct",
+      "question": "How soon after receipt must goods be put away?",
+      "expected_docs": [
+        "WH-001"
+      ],
+      "retrieved_docs": [
+        "WH-001",
+        "WH-001",
+        "WH-003",
+        "WH-003"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-001",
+          "section": "5.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 9563.1,
+      "passed": true,
+      "notes": "ok"
+    },
+    {
+      "id": "Q3",
+      "type": "direct",
+      "question": "How long is an RMA number valid?",
+      "expected_docs": [
+        "WH-004"
+      ],
+      "retrieved_docs": [
+        "WH-004",
+        "WH-004",
+        "WH-004",
+        "CS-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-004",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 4148.0,
+      "passed": true,
+      "notes": "ok"
+    },
+    {
+      "id": "Q4",
+      "type": "direct",
+      "question": "What liability insurance must a new supplier carry?",
+      "expected_docs": [
+        "PR-002"
+      ],
+      "retrieved_docs": [
+        "PR-002",
+        "PR-002",
+        "PR-002",
+        "PR-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "PR-002",
+          "section": "2.2",
+          "valid": true
+        },
+        {
+          "doc_id": "PR-002",
+          "section": "1.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.0,
+      "latency_ms": 4139.6,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
+    },
+    {
+      "id": "Q5",
+      "type": "direct",
+      "question": "How long does a supplier have to respond to a SCAR?",
+      "expected_docs": [
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "QA-001",
+        "QA-001",
+        "PR-002",
+        "QA-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "QA-001",
+          "section": "3.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 4007.7,
+      "passed": true,
+      "notes": "ok"
+    },
+    {
+      "id": "Q6",
+      "type": "direct",
+      "question": "What price variance is allowed in 3-way match?",
+      "expected_docs": [
+        "FIN-001"
+      ],
+      "retrieved_docs": [
+        "FIN-001",
+        "FIN-001",
+        "FIN-001",
+        "FIN-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "FIN-001",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.0,
+      "latency_ms": 4618.4,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
+    },
+    {
+      "id": "Q7",
+      "type": "direct",
+      "question": "Who approves a $3,000 inventory write-off?",
+      "expected_docs": [
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "WH-005",
+        "WH-005",
+        "WH-005",
+        "WH-005"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-005",
+          "section": "2.1",
+          "valid": true
+        },
+        {
+          "doc_id": "WH-005",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.5,
+      "latency_ms": 6813.0,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
+    },
+    {
+      "id": "Q8",
+      "type": "direct",
+      "question": "What's the same-day ship cut-off for key accounts?",
+      "expected_docs": [
+        "CS-001"
+      ],
+      "retrieved_docs": [
+        "CS-001",
+        "CS-001",
+        "CS-001",
+        "CS-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "CS-001",
+          "section": "3.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 4761.2,
+      "passed": true,
+      "notes": "ok"
+    },
+    {
+      "id": "Q9",
+      "type": "multi",
+      "question": "A supplier delivery arrives with damaged units. What steps and reports are required?",
+      "expected_docs": [
+        "WH-003",
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "WH-003",
+        "WH-003",
+        "WH-001",
+        "PR-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-003",
+          "section": "1.2",
+          "valid": true
+        },
+        {
+          "doc_id": "WH-001",
+          "section": "4.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 10851.5,
+      "passed": false,
+      "notes": "citation not within expected docs; not all expected docs cited; not all expected docs in top-4"
+    },
+    {
+      "id": "Q10",
+      "type": "multi",
+      "question": "A cycle count shows a $7,000 shortage. What are the recount rules and who approves the adjustment?",
+      "expected_docs": [
+        "WH-002",
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "WH-002",
+        "WH-002",
+        "WH-002",
+        "WH-002"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": true,
+      "refusal_reason": "invalid_citation",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 13147.1,
+      "passed": false,
+      "notes": "false refusal: invalid_citation; not all expected docs in top-4"
+    },
+    {
+      "id": "Q11",
+      "type": "multi",
+      "question": "The invoice on a $30,000 PO is 5% over the PO price. What happens, and who approves a PO change?",
+      "expected_docs": [
+        "FIN-001",
+        "PR-001"
+      ],
+      "retrieved_docs": [
+        "PR-001",
+        "PR-001",
+        "FIN-001",
+        "PR-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "PR-001",
+          "section": "2.1",
+          "valid": true
+        },
+        {
+          "doc_id": "FIN-001",
+          "section": "3.1",
+          "valid": true
+        },
+        {
+          "doc_id": "PR-001",
+          "section": "5.3",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.25,
+      "latency_ms": 15877.0,
+      "passed": false,
+      "notes": "unfaithful claim(s)"
+    },
+    {
+      "id": "Q12",
+      "type": "ambiguous",
+      "question": "What's the approval limit?",
+      "expected_docs": [
+        "PR-001",
+        "WH-005"
+      ],
+      "retrieved_docs": [
+        "PR-001",
+        "WH-005",
+        "PR-001",
+        "WH-005"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "WH-005",
+          "section": "2.2",
+          "valid": true
+        }
+      ],
+      "faithfulness": 0.0,
+      "latency_ms": 4008.3,
+      "passed": false,
+      "notes": "unfaithful claim(s); not all expected docs cited; no labelled readings"
+    },
+    {
+      "id": "Q13",
+      "type": "ambiguous",
+      "question": "How long do I have to report a problem?",
+      "expected_docs": [
+        "WH-003",
+        "QA-001"
+      ],
+      "retrieved_docs": [
+        "QA-001",
+        "PR-001",
+        "WH-004",
+        "QA-001"
+      ],
+      "hit": true,
+      "rr": 1.0,
+      "refused": false,
+      "refusal_reason": null,
+      "citations": [
+        {
+          "doc_id": "QA-001",
+          "section": "2.1",
+          "valid": true
+        }
+      ],
+      "faithfulness": 1.0,
+      "latency_ms": 4709.1,
+      "passed": false,
+      "notes": "not all expected docs cited; no labelled readings; not all expected docs in top-4"
+    },
+    {
+      "id": "Q14",
+      "type": "unanswerable",
+      "question": "How often must forklift operators be recertified?",
+      "expected_docs": [],
+      "retrieved_docs": [
+        "PR-002",
+        "QA-001",
+        "QA-001",
+        "PR-002"
+      ],
+      "hit": null,
+      "rr": null,
+      "refused": true,
+      "refusal_reason": "below_gate",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 64.5,
+      "passed": true,
+      "notes": "correctly refused (below_gate)"
+    },
+    {
+      "id": "Q15",
+      "type": "unanswerable",
+      "question": "What's the current price of SKU 4471 from Granite Fasteners?",
+      "expected_docs": [],
+      "retrieved_docs": [
+        "FIN-001",
+        "PR-001",
+        "WH-004",
+        "WH-004"
+      ],
+      "hit": null,
+      "rr": null,
+      "refused": true,
+      "refusal_reason": "below_gate",
+      "citations": [],
+      "faithfulness": null,
+      "latency_ms": 21.5,
+      "passed": true,
+      "notes": "correctly refused (below_gate)"
+    }
+  ]
+}

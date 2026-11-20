@@ -81,8 +81,9 @@ class Settings:
     embed_model: str = "nomic-embed-text"
     top_k: int = 4
     rrf_k: int = 60
-    # Placeholder: the real value is calibrated later on a held-out set, NOT the eval set.
-    gate_threshold: float = 0.55
+    # Calibrated on the held-out set (eval/calibration.yaml, eval/results/calibration.json), NOT
+    # the 15 eval questions: maximises balanced accuracy, ties to the lower threshold.
+    gate_threshold: float = 0.61
     candidates: int = 10
     docs_dir: str = "data/docs"
     chroma_dir: str = "data/cache/chroma"

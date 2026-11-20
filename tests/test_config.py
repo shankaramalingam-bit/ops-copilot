@@ -10,7 +10,7 @@ def test_defaults_from_empty_env():
     assert s.llm_provider == "ollama" and s.ollama_model == "llama3.1:8b"
     assert s.ollama_base_url == "http://localhost:11434"
     assert s.groq_model == "llama-3.1-8b-instant" and s.embed_model == "nomic-embed-text"
-    assert (s.top_k, s.rrf_k, s.gate_threshold) == (4, 60, 0.55)
+    assert (s.top_k, s.rrf_k, s.gate_threshold) == (4, 60, 0.61)
     assert s.docs_dir == "data/docs" and s.chroma_dir == "data/cache/chroma"
 
 
