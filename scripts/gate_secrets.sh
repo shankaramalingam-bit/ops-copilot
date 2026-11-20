@@ -1,116 +1,298 @@
 #!/usr/bin/env bash
 # Gate: secrets. Scans the working tree (tracked + untracked-not-ignored) AND the git index
 # for secret patterns. Prints ONLY file:line (or commit:file, or a variable name), never
-# matched text.
+# matched text. A path that itself matches a vendor pattern is printed as <redacted-path>.
 # Usage: gate_secrets.sh [--self-test | --history]
-#   (none)       scan working tree + index, check tracked .env files, check .env.example
-#   --history    scan every commit's diff (git log -p --all) with the vendor patterns
+#   (none)       scan working tree + index, check tracked .env files, check every .env.example
+#   --history    scan history: every commit's diff (git log -p --text --all, merges against
+#                the first parent), commit messages, annotated tag messages, blobs reachable
+#                only from tags, plus a path-only check for .env* files that ever existed
 #   --self-test  prove each pattern fires on a runtime-built fake and not on clean input
 # Binary files are scanned with the vendor-prefix patterns only (generic pattern is noisy).
-# .env* paths are never read (protected); they are skipped explicitly.
+#
+# .env handling (ONE definition, is_env_path / ENV_RE): a path whose basename is exactly
+# `.env` or matches `.env.*`, and is not `.env.example`, is a protected env file: its content
+# is never read (working tree, index, history) and, if tracked or ever committed, it FAILS.
+# `.envrc`, `.env-notes.md`, `.environment`, files under a `.env/` dir are scanned normally.
+# EVERY `.env.example` (any depth) is content-scanned (all patterns) and must be well formed:
+# lines are NAME=VALUE (NAME matches [A-Za-z_][A-Za-z0-9_]*, optional `export `), values of
+# KEY/TOKEN/SECRET/PASSWORD-named variables must be empty. Where one cannot be read (agent
+# sandbox) a skip line naming the path is printed; its index/history copies are still scanned.
 # Symlinks are never followed. A symlink to a .env* target (other than .env.example) fails.
-# Read errors fail CLOSED.
+# Read and enumeration errors fail CLOSED.
+#
+# Known limitations (not detected): base64-encoded or split keys; the content of submodules;
+# unreachable objects (dangling blobs, reflog-only commits); generic-pattern false positives on
+# identifier-like values (owner decision pending, the generic pattern is deliberately NOT
+# relaxed); file names containing newlines may be attributed imprecisely in history output.
 set -euo pipefail
 export LC_ALL=C # byte semantics: binary files must not break cut/sed
 cd "$(git rev-parse --show-toplevel)"
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/gate_secrets.XXXXXX")"
+trap 'rm -rf "$TMPD"' EXIT
 
 # Patterns are assembled from fragments so this file never matches its own scan.
 P_GROQ='gsk_[A-Za-z0-9]{20,}'
 P_SK='sk-[A-Za-z0-9_-]{20,}'
-P_AWS='AKIA[0-9A-Z]{16}'
+P_STRIPE='(sk|rk)_live_[0-9A-Za-z]{20,}'
+P_AWS='(AKIA|ASIA)[0-9A-Z]{16}'
 P_PEM='-----BEGIN [A-Z ]*PRIVATE KEY-----'
+P_PGP='-----BEGIN PGP PRIVATE KEY'' BLOCK-----'
 P_GH='gh[pos]_[A-Za-z0-9]{20,}'
 P_GHPAT='github_pat_[A-Za-z0-9_]{20,}'
 P_SLACK='xox[abprs]-[A-Za-z0-9-]{10,}'
+P_SLACKAPP='xapp-[A-Za-z0-9-]{10,}'
 P_GOOG='AIza[0-9A-Za-z_-]{35}'
 P_HF='hf_[A-Za-z0-9]{30,}'
 P_LS='lsv2_[A-Za-z0-9_]{20,}'
-# Vendor-prefix patterns: safe on binary files and in history.
-VENDOR="($P_GROQ|$P_SK|$P_AWS|$P_PEM|$P_GH|$P_GHPAT|$P_SLACK|$P_GOOG|$P_HF|$P_LS)"
+# Vendor-prefix patterns: safe on binary files, in history, and on path names.
+VENDOR="($P_GROQ|$P_SK|$P_STRIPE|$P_AWS|$P_PEM|$P_PGP|$P_GH|$P_GHPAT|$P_SLACK|$P_SLACKAPP|$P_GOOG|$P_HF|$P_LS)"
 # Text-only patterns.
 P_BEARER='Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,}'
 P_URL='://[^/[:space:]:@]+:[^/[:space:]@]+@'
 P_GEN='(api[_-]?key|secret|token|password)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./+=-]{16,}'
 PATTERN="($VENDOR|$P_BEARER|$P_URL|$P_GEN)"
 
-# Pathspec excluding protected .env* paths (never read, never scanned).
-EXCL=(':(exclude,glob).env*' ':(exclude,glob)**/.env*')
+# THE definition of a protected env basename (bash and awk both use this regex).
+ENV_RE='^[.]env([.].*)?$'
+EX_NAME='.env.example'
+HDR=$'\001'
+RE_ASSIGN='^(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$'
 
-# is_env_target <link-target>: true if its basename is .env or .env.* but not .env.example.
+# is_env_path <path>: basename is .env or .env.* but not .env.example.
+is_env_path() {
+  local b="${1##*/}"
+  [[ $b =~ $ENV_RE ]] && [ "$b" != "$EX_NAME" ]
+}
+is_example() { [ "${1##*/}" = "$EX_NAME" ]; }
+# is_env_target <link-target>: same definition applied to a symlink target.
 is_env_target() {
-  local t="$1" base
+  local t="$1"
   while [ "${t%/}" != "$t" ]; do t="${t%/}"; done
-  base="${t##*/}"
-  case "$base" in
-    .env.example) return 1 ;;
-    .env | .env.*) return 0 ;;
-  esac
-  return 1
+  is_env_path "$t"
 }
 
-# scan_files: reads NUL-separated paths on stdin. Emits tagged records, never matched text:
-#   H|file:line   possible secret      E|file   unreadable (fail closed)
-#   S|file        symlink to a .env* target
+# rp <string>: print the string, or <redacted-path> if it matches a vendor pattern.
+rp() {
+  if grep -qaE -e "$VENDOR" <<<"$1"; then printf '<redacted-path>'; else printf '%s' "$1"; fi
+}
+
+# scan_lines <file>: prints matching line numbers (never text). rc 2 = read error (fail closed).
+scan_lines() {
+  local f="$1" rc=0 a b
+  a="$(grep -IEn -e "$PATTERN" -- "$f" 2>/dev/null | cut -d: -f1)" || rc=$?
+  [ "$rc" -le 1 ] || return 2
+  rc=0
+  b="$(grep -aEn -e "$VENDOR" -- "$f" 2>/dev/null | cut -d: -f1)" || rc=$?
+  [ "$rc" -le 1 ] || return 2
+  printf '%s\n%s\n' "$a" "$b" | sort -un | sed '/^$/d'
+}
+
+# emit_hits <path> <line-numbers>: H records, path redacted if needed.
+emit_hits() {
+  local p n
+  p="$(rp "$1")"
+  for n in $2; do echo "H|$p:$n"; done
+}
+
+# example_check <label> <file>: strict .env.example parse. Emits M|label:line: malformed line,
+# V|label: NAME (non-empty secret-named value), X|label (checked). rc 1 = unreadable.
+example_check() {
+  local label="$1" file="$2" p n=0 line name val v up content
+  content="$(cat -- "$file" 2>/dev/null)" || return 1
+  p="$(rp "$label")"
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "$line" in '' | '#'*) continue ;; esac
+    if [[ ! $line =~ $RE_ASSIGN ]]; then
+      echo "M|$p:$n: malformed line"
+      continue
+    fi
+    name="${BASH_REMATCH[2]}"
+    val="${BASH_REMATCH[3]}"
+    up="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')"
+    case "$up" in *KEY* | *TOKEN* | *SECRET* | *PASSWORD*) ;; *) continue ;; esac
+    v="${val#"${val%%[![:space:]]*}"}"
+    case "$v" in '""'* | "''"*) v="${v:2}"; v="${v#"${v%%[![:space:]]*}"}" ;; esac
+    case "$v" in '' | '#'*) continue ;; esac
+    echo "V|$p: $(rp "$name")"
+  done <<<"$content"
+  echo "X|$p"
+}
+
+# scan_files: reads NUL-separated working-tree paths on stdin. Emits tagged records:
+#   H|file:line  possible secret   E|file  unreadable (fail closed)
+#   S|file       symlink to a .env* target   K|file  .env.example not readable here (skipped)
 scan_files() {
-  local f rc out t
+  local f lines t ex
   while IFS= read -r -d '' f; do
-    case "$f" in
-      .env | .env.* | */.env | */.env.*) continue ;; # protected path, never read
-    esac
+    if is_env_path "$f"; then continue; fi # protected path, never read
+    ex=0
+    if is_example "$f"; then ex=1; fi
     if [ -L "$f" ]; then
       t="$(readlink "$f" || true)"
-      if is_env_target "$t"; then echo "S|$f"; fi
+      if is_env_target "$t"; then echo "S|$(rp "$f")"; elif [ "$ex" = 1 ]; then echo "K|$(rp "$f")"; fi
       continue # never follow symlinks
     fi
     [ -e "$f" ] || continue # tracked but deleted on disk: index scan still covers it
-    [ -f "$f" ] || continue # directories (submodules), sockets, etc.
-    if [ ! -r "$f" ]; then echo "E|$f"; continue; fi
-    rc=0
-    out="$(grep -IEinH -e "$PATTERN" -- "$f" 2>/dev/null | cut -d: -f1,2)" || rc=$?
-    [ "$rc" -le 1 ] || { echo "E|$f"; continue; }
-    [ -z "$out" ] || printf 'H|%s\n' "$out"
-    rc=0
-    out="$(grep -aEnH -e "$VENDOR" -- "$f" 2>/dev/null | cut -d: -f1,2)" || rc=$?
-    [ "$rc" -le 1 ] || { echo "E|$f"; continue; }
-    [ -z "$out" ] || printf 'H|%s\n' "$out"
+    if [ ! -f "$f" ]; then # directories (submodules), sockets, etc.
+      if [ "$ex" = 1 ]; then echo "K|$(rp "$f")"; fi
+      continue
+    fi
+    if [ ! -r "$f" ] || ! lines="$(scan_lines "$f")"; then
+      if [ "$ex" = 1 ]; then echo "K|$(rp "$f")"; else echo "E|$(rp "$f")"; fi
+      continue
+    fi
+    emit_hits "$f" "$lines"
+    if [ "$ex" = 1 ]; then example_check "$f" "$f" || echo "K|$(rp "$f")"; fi
   done
 }
 
-# index_scan: scans staged content. Emits the same tagged records as scan_files.
+# index_scan: scans staged blobs (not the working tree). Same records as scan_files.
 index_scan() {
-  local rc out rec meta path mode sha t
-  rc=0
-  out="$(git grep --cached -I -nE -e "$PATTERN" -- . "${EXCL[@]}" 2>/dev/null | cut -d: -f1,2)" || rc=$?
-  [ "$rc" -le 1 ] || echo "E|(index: text scan error)"
-  [ -z "$out" ] || printf 'H|%s\n' "$out"
-  out=""
-  rc=0
-  out="$(git grep --cached -a -nE -e "$VENDOR" -- . "${EXCL[@]}" 2>/dev/null | cut -d: -f1,2)" || rc=$?
-  [ "$rc" -le 1 ] || echo "E|(index: binary scan error)"
-  [ -z "$out" ] || printf 'H|%s\n' "$out"
-  # Tracked symlinks whose target is a .env* file (read from the blob, never followed).
+  local rec meta path mode sha stage t lines ex blob="$TMPD/blob"
+  if ! git ls-files -s -z >"$TMPD/idx" 2>"$TMPD/idx.err" || [ -s "$TMPD/idx.err" ]; then
+    echo "D|index"
+    return 0
+  fi
   while IFS= read -r -d '' rec; do
     meta="${rec%%$'\t'*}"
     path="${rec#*$'\t'}"
-    mode="${meta%% *}"
-    [ "$mode" = "120000" ] || continue
-    sha="$(printf '%s' "$meta" | awk '{print $2}')"
-    t="$(git cat-file blob "$sha" 2>/dev/null || true)"
-    if is_env_target "$t"; then echo "S|$path"; fi
-  done < <(git ls-files -s -z)
+    read -r mode sha stage <<<"$meta"
+    [ "$mode" != "160000" ] || continue # submodule commit pointer
+    if [ "$mode" = "120000" ]; then
+      t="$(git cat-file blob "$sha" 2>/dev/null </dev/null || true)"
+      if is_env_target "$t"; then echo "S|$(rp "$path")"; fi
+      continue
+    fi
+    if is_env_path "$path"; then continue; fi
+    ex=0
+    if is_example "$path"; then ex=1; fi
+    if ! git cat-file blob "$sha" >"$blob" 2>/dev/null </dev/null || ! lines="$(scan_lines "$blob")"; then
+      echo "E|$(rp "$path")"
+      continue
+    fi
+    emit_hits "$path" "$lines"
+    if [ "$ex" = 1 ]; then example_check "$path" "$blob" || echo "E|$(rp "$path")"; fi
+  done <"$TMPD/idx"
 }
 
-# history_scan: vendor patterns over every added line in git log -p --all. Prints commit:file.
+# name_hits <NUL-file>: N records for list entries whose NAME matches a vendor pattern.
+# (BSD grep has no working -z, so NULs become newlines; only the entry number is kept.)
+name_hits() {
+  tr '\0' '\n' <"$1" | { grep -aEn -e "$VENDOR" || true; } | cut -d: -f1 |
+    sed -n 's/^\([0-9][0-9]*\)$/N|<redacted-path> (entry \1 of the sorted file list)/p'
+}
+
+# msg_hits <C|G> <file>: ids of records (header line \001<id>) that contain a vendor match.
+msg_hits() {
+  { grep -aEn -e "^$HDR[0-9a-f]{40,64}\$|$VENDOR" "$2" || true; } |
+    awk -v t="$1" -v h="$HDR" '
+      { sub(/^[0-9]+:/, "") }
+      substr($0, 1, 1) == h { c = substr($0, 2, 12); next }
+      !(c in seen) { seen[c] = 1; print t "|" c }'
+}
+
+# history_scan: emits tagged records (commit/tag/blob ids are 12-char prefixes).
 history_scan() {
-  git rev-parse --verify -q HEAD >/dev/null 2>&1 || return 0
-  git log -p --all --no-color --no-ext-diff --format='commit %H' -- . "${EXCL[@]}" |
-    grep -aE -e "^(commit [0-9a-f]+|diff --git .*|\\+.*$VENDOR.*)$" |
-    awk '
-      /^commit [0-9a-f]+$/ { c = substr($2, 1, 12); next }
-      /^diff --git / { f = $0; sub(/^diff --git a\/.* b\//, "", f); next }
-      /^\+\+\+ / { next }
-      /^\+/ { k = c ":" f; if (!(k in seen)) { seen[k] = 1; print k } }
-    '
+  if [ -z "$(git for-each-ref --count=1 --format=x 2>/dev/null)" ]; then
+    git rev-parse --verify -q HEAD >/dev/null 2>&1 || return 0
+  fi
+  local c f rc sha path line blob="$TMPD/hblob"
+
+  # 1. added lines of every commit (binaries as text, merges against the first parent).
+  if git log -p --text --all --no-color --no-ext-diff --no-textconv --diff-merges=first-parent \
+    --format='commit %H' >"$TMPD/hist" 2>/dev/null; then
+    { grep -aE -e "^(commit [0-9a-f]+|diff --git .*|@@ .*|\\+.*$VENDOR.*)$" "$TMPD/hist" || true; } |
+      awk -v re="$ENV_RE" '
+        /^commit [0-9a-f]+$/ { c = substr($2, 1, 12); next }
+        /^diff --git / { f = $0; sub(/^diff --git a\/.* b\//, "", f); b = f; sub(/^.*\//, "", b)
+                         skip = (b ~ re && b != ".env.example"); hdr = 1; next }
+        /^@@ / { hdr = 0; next }
+        hdr && /^\+\+\+ / { next }
+        /^\+/ { if (!skip) { k = c "|" f; if (!(k in seen)) { seen[k] = 1; print k } } }
+      ' | while IFS='|' read -r c f; do echo "H|$c:$(rp "$f")"; done
+  else
+    echo "E|(history: git log -p failed)"
+  fi
+
+  # 2. paths ever added: .env* paths (path only, L) and names matching vendor patterns (N).
+  if git log --all -z --name-only --diff-filter=A --no-renames --diff-merges=first-parent \
+    --format='%x01%H' >"$TMPD/names" 2>/dev/null; then
+    tr '\0' '\n' <"$TMPD/names" | awk -v re="$ENV_RE" '
+      substr($0, 1, 1) == "\001" { c = substr($0, 2, 12); next }
+      $0 == "" { next }
+      { b = $0; sub(/^.*\//, "", b)
+        if (b ~ re && b != ".env.example") print "L|" c "|" $0
+        print "A|" c "|" $0 }' >"$TMPD/names.out"
+    { grep -a '^L|' "$TMPD/names.out" || true; } |
+      while IFS='|' read -r _ c f; do echo "L|$c:$(rp "$f")"; done
+    { grep -aE -e "^A\\|[0-9a-f]+\\|.*$VENDOR" "$TMPD/names.out" || true; } |
+      while IFS='|' read -r _ c _; do echo "N|$c:<redacted-path>"; done
+  else
+    echo "E|(history: cannot list paths)"
+  fi
+
+  # 3. commit messages and annotated tag messages (ids only).
+  if git log --all --format='%x01%H%n%B' >"$TMPD/msgs" 2>/dev/null; then
+    msg_hits C "$TMPD/msgs"
+  else
+    echo "E|(history: cannot read commit messages)"
+  fi
+  if git for-each-ref refs/tags --format='%01%(objectname)%0a%(contents)' >"$TMPD/tags" 2>/dev/null; then
+    msg_hits G "$TMPD/tags"
+  else
+    echo "E|(history: cannot read tags)"
+  fi
+
+  # 4. blobs not reachable from any commit (e.g. a tag pointing at a blob or tree).
+  if git rev-list --objects --all >"$TMPD/all" 2>/dev/null && git rev-list --all >"$TMPD/commits" 2>/dev/null; then
+    : >"$TMPD/reach"
+    if [ -s "$TMPD/commits" ]; then
+      git rev-list --objects --stdin <"$TMPD/commits" >"$TMPD/reach" 2>/dev/null || echo "E|(history: reachability)"
+    fi
+    awk 'NR == FNR { r[$1] = 1; next } !($1 in r) { print }' "$TMPD/reach" "$TMPD/all" >"$TMPD/cand"
+    while IFS= read -r line; do
+      sha="${line%% *}"
+      path=""
+      if [ "$line" != "$sha" ]; then path="${line#* }"; fi
+      [ "$(git cat-file -t "$sha" 2>/dev/null </dev/null)" = blob ] || continue
+      if [ -n "$path" ] && is_env_path "$path"; then continue; fi
+      if ! git cat-file blob "$sha" >"$blob" 2>/dev/null </dev/null; then echo "E|(blob ${sha:0:12})"; continue; fi
+      rc=0
+      grep -aqE -e "$VENDOR" "$blob" 2>/dev/null || rc=$?
+      if [ "$rc" -eq 0 ]; then echo "B|${sha:0:12}"; elif [ "$rc" -ne 1 ]; then echo "E|(blob ${sha:0:12})"; fi
+    done <"$TMPD/cand"
+  else
+    echo "E|(history: cannot enumerate objects)"
+  fi
+}
+
+# report <prefix> <records>: prints each failing group to stderr; sets fail=1. K/X go to stdout.
+fail=0
+report() {
+  local pfx="$1" recs="$2" tag head out
+  while IFS='|' read -r tag head; do
+    out="$(printf '%s\n' "$recs" | sed -n "s/^$tag|//p")"
+    [ -n "$out" ] || continue
+    echo "$pfx: FAIL $head" >&2
+    printf '%s\n' "$out" >&2
+    fail=1
+  done <<'EOF'
+D|cannot enumerate files (fail closed) (git reported an error listing:)
+W|tracked env file(s) (path only):
+H|possible secrets at (file:line or commit:file):
+E|unreadable/unscannable item(s) (fail closed):
+S|symlink(s) to .env* target:
+N|file name(s) match a secret pattern (path redacted):
+L|.env* path(s) exist in history (commit:path, content never read):
+M|malformed .env.example line(s) (path:line, content never shown):
+V|non-empty value for secret-named variable(s) (path: NAME only):
+C|commit message(s) match a secret pattern (commit ids only):
+G|annotated tag message(s) match a secret pattern (tag object ids only):
+B|tag-only blob(s) match a secret pattern (blob ids only):
+EOF
 }
 
 # fake <kind>: runtime-built fake credential (nothing key-shaped exists in source).
@@ -120,13 +302,18 @@ fake() {
   case "$1" in
     groq) printf 'gsk_%s' "$(rep x 24)" ;;
     sk) printf 'sk-%s' "$(rep x 24)" ;;
+    stripe) printf 'sk_%s%s' live_ "$(rep a 24)" ;;
+    stripe-rk) printf 'rk_%s%s' live_ "$(rep a 24)" ;;
     aws) printf 'AKIA%s' "$(rep A 16)" ;;
+    asia) printf 'ASIA%s' "$(rep A 16)" ;;
     pem) printf '%sBEGIN RSA PRIVATE KEY%s' "$dash" "$dash" ;;
+    pgp) printf '%sBEGIN PGP PRIVATE KEY BLOCK%s' "$dash" "$dash" ;;
     ghp) printf 'ghp_%s' "$(rep a 36)" ;;
     gho) printf 'gho_%s' "$(rep a 36)" ;;
     ghs) printf 'ghs_%s' "$(rep a 36)" ;;
     ghpat) printf 'github_pat_%s' "$(rep a 30)" ;;
     slack) printf 'xoxb-%s-%s' "$(rep 1 12)" "$(rep a 12)" ;;
+    xapp) printf 'xapp-%s-%s' "$(rep 1 12)" "$(rep a 12)" ;;
     google) printf 'AIza%s' "$(rep a 35)" ;;
     hf) printf 'hf_%s' "$(rep a 32)" ;;
     lsv2) printf 'lsv2_pt_%s' "$(rep a 24)" ;;
@@ -137,12 +324,12 @@ fake() {
   esac
 }
 
-KINDS="groq sk aws pem ghp gho ghs ghpat slack google hf lsv2"
+KINDS="groq sk stripe stripe-rk aws asia pem pgp ghp gho ghs ghpat slack xapp google hf lsv2"
 TEXT_KINDS="bearer url gen-json gen-plain"
 
 if [ "${1:-}" = "--self-test" ]; then
-  d="$(mktemp -d "${TMPDIR:-/tmp}/gate_secrets.XXXXXX")"
-  trap 'rm -rf "$d"' EXIT
+  d="$TMPD/self"
+  mkdir "$d"
   ok=1
   expect() { # expect <label> <want> <got>
     if [ "$2" = "$3" ]; then echo "  ok   $1"; else echo "  FAIL $1 (want '$2' got '$3')" >&2; ok=0; fi
@@ -167,6 +354,22 @@ if [ "${1:-}" = "--self-test" ]; then
   expect "symlink to .env.example allowed" "" "$(printf '%s\0' "$d/link-ex" | scan_files)"
   ln -s "$d/planted.txt" "$d/link-plant"
   expect "symlink not followed" "" "$(printf '%s\0' "$d/link-plant" | scan_files)"
+  # the single .env definition (strings only; no env file is ever created)
+  for p in .env .env.local a/.env.production .env.; do
+    if is_env_path "$p"; then r=yes; else r=no; fi
+    expect "is_env_path $p -> yes" yes "$r"
+  done
+  for p in .envrc .env-notes.md .environment .env.example a/.env.example .env/x x.env; do
+    if is_env_path "$p"; then r=yes; else r=no; fi
+    expect "is_env_path $p -> no" no "$r"
+  done
+  # path redaction
+  expect "rp redacts key-shaped name" "<redacted-path>" "$(rp "$(fake groq).txt")"
+  expect "rp keeps plain name" "a/b.txt" "$(rp a/b.txt)"
+  # strict .env.example parsing
+  printf 'A_API_KEY=\nB_TOKEN="" # c\nOPENAI_API_KEY: x\nC_SECRET=v\nPLAIN=1\njunk line\n' >"$d/ex.txt"
+  got="$(example_check ex "$d/ex.txt" | sort | tr '\n' ' ')"
+  expect "example_check parse" "M|ex:3: malformed line M|ex:6: malformed line V|ex: C_SECRET X|ex " "$got"
   if [ "$ok" -eq 1 ]; then
     echo "gate_secrets self-test: PASS (every pattern flagged, clean/generic-binary/symlink not flagged)"
     exit 0
@@ -176,12 +379,9 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 if [ "${1:-}" = "--history" ]; then
-  hits="$(history_scan)"
-  if [ -n "$hits" ]; then
-    echo "gate_secrets --history: FAIL possible secrets at (commit:file):" >&2
-    echo "$hits" >&2
-    exit 1
-  fi
+  recs="$(history_scan | sort -u)"
+  report "gate_secrets --history" "$recs"
+  if [ "$fail" -ne 0 ]; then exit 1; fi
   echo "gate_secrets --history: OK"
   exit 0
 fi
@@ -191,66 +391,33 @@ if [ -n "${1:-}" ]; then
   exit 2
 fi
 
-fail=0
+# Enumerate files; any error (even a warning on stderr) fails closed.
+enum_fail=0
+if ! git ls-files -z >"$TMPD/tracked" 2>"$TMPD/e1" || [ -s "$TMPD/e1" ]; then enum_fail=1; fi
+if ! git ls-files -z --others --exclude-standard >"$TMPD/others" 2>"$TMPD/e2" || [ -s "$TMPD/e2" ]; then enum_fail=1; fi
+cat "$TMPD/tracked" "$TMPD/others" | sort -zu >"$TMPD/paths"
 
-# Tracked .env files other than .env.example are forbidden.
-bad_env="$(git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -Ev '(^|/)\.env\.example$' || true)"
-if [ -n "$bad_env" ]; then
-  echo "gate_secrets: FAIL tracked env file(s):" >&2
-  echo "$bad_env" >&2
-  fail=1
-fi
+records="$(
+  {
+    if [ "$enum_fail" = 1 ]; then echo "D|working tree listing"; fi
+    while IFS= read -r -d '' f; do
+      if is_env_path "$f"; then echo "W|$(rp "$f")"; fi
+    done <"$TMPD/tracked"
+    name_hits "$TMPD/paths"
+    scan_files <"$TMPD/paths"
+    index_scan
+  } | sort -u
+)"
+report "gate_secrets" "$records"
 
-records="$({ { git ls-files -z; git ls-files -z --others --exclude-standard; } | sort -zu | scan_files; index_scan; } | sort -u)"
-hits="$(printf '%s\n' "$records" | sed -n 's/^H|//p')"
-errs="$(printf '%s\n' "$records" | sed -n 's/^E|//p')"
-syms="$(printf '%s\n' "$records" | sed -n 's/^S|//p')"
-if [ -n "$hits" ]; then
-  echo "gate_secrets: FAIL possible secrets at (file:line):" >&2
-  echo "$hits" >&2
-  fail=1
-fi
-if [ -n "$errs" ]; then
-  echo "gate_secrets: FAIL unreadable file(s) (fail closed):" >&2
-  echo "$errs" >&2
-  fail=1
-fi
-if [ -n "$syms" ]; then
-  echo "gate_secrets: FAIL symlink(s) to .env* target:" >&2
-  echo "$syms" >&2
-  fail=1
-fi
-
-# .env.example: when readable (CI), secret-named variables must have empty values.
-# Only variable NAMES are ever printed. When unreadable (agent sandbox), say so explicitly.
-if [ -L .env.example ]; then
-  echo "gate_secrets: skipped content scan of .env.example (symlink, not followed)"
-elif [ -e .env.example ] && content="$(cat .env.example 2>/dev/null)"; then
-  bad_vars=""
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line#"${line%%[![:space:]]*}"}"
-    case "$line" in '' | '#'*) continue ;; esac
-    line="${line#export }"
-    case "$line" in *=*) ;; *) continue ;; esac
-    name="${line%%=*}"
-    val="${line#*=}"
-    name="$(printf '%s' "$name" | tr -d '[:space:]')"
-    up="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')"
-    case "$up" in *KEY* | *TOKEN* | *SECRET* | *PASSWORD*) ;; *) continue ;; esac
-    val="${val#"${val%%[![:space:]]*}"}"
-    case "$val" in '#'*) val="" ;; esac
-    val="$(printf '%s' "$val" | tr -d "\"'[:space:]")"
-    if [ -n "$val" ]; then bad_vars="$bad_vars$name"$'\n'; fi
-  done <<<"$content"
-  if [ -n "$bad_vars" ]; then
-    echo "gate_secrets: FAIL .env.example has non-empty value for variable(s) (names only):" >&2
-    printf '%s' "$bad_vars" >&2
-    fail=1
-  else
-    echo "gate_secrets: .env.example checked (secret-named variables are empty)"
-  fi
-else
-  echo "gate_secrets: skipped content scan of .env.example (protected path; owner-verified)"
+# Stdout notes: .env.example skips and successful checks.
+while IFS= read -r p; do
+  [ -z "$p" ] || echo "gate_secrets: skipped content scan of $p (not readable here, symlink or not a regular file; owner-verified; index copy still scanned)"
+done <<<"$(printf '%s\n' "$records" | sed -n 's/^K|//p')"
+if [ "$fail" -eq 0 ]; then
+  while IFS= read -r p; do
+    [ -z "$p" ] || echo "gate_secrets: $p checked (strict format; secret-named variables are empty)"
+  done <<<"$(printf '%s\n' "$records" | sed -n 's/^X|//p')"
 fi
 
 if [ "$fail" -ne 0 ]; then exit 1; fi
