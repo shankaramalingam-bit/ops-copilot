@@ -5,29 +5,36 @@
 # Usage: gate_secrets.sh [--self-test | --history]
 #   (none)       scan working tree + index, check tracked .env files, check every .env.example
 #   --history    scan history: every commit's diff (git log -p --text --all, merges against
-#                the first parent), commit messages, annotated tag messages, blobs reachable
-#                only from tags, plus a path-only check for .env* files that ever existed
+#                the first parent) with `.env` / `.env.*` paths EXCLUDED by pathspec (their content
+#                is never asked of git) and `.env.example` scanned in its own pass, commit
+#                messages, every annotated tag message (nested tags peeled), blobs reachable only
+#                from tags, plus a path-only check for .env* files that ever existed (commits AND
+#                trees reachable only from tags)
 #   --self-test  prove each pattern fires on a runtime-built fake and not on clean input
 # Binary files are scanned with the vendor-prefix patterns only (generic pattern is noisy).
 #
 # .env handling (ONE definition, is_env_path / ENV_RE): a path whose basename is exactly
 # `.env` or matches `.env.*`, and is not `.env.example`, is a protected env file: its content
-# is never read (working tree, index, history) and, if tracked or ever committed, it FAILS.
+# is never read (working tree, index, history: git log -p excludes them by pathspec) and, if
+# tracked or ever committed, it FAILS.
 # `.envrc`, `.env-notes.md`, `.environment`, files under a `.env/` dir are scanned normally.
 # EVERY `.env.example` (any depth) is content-scanned (all patterns) and must be well formed:
 # lines are NAME=VALUE (NAME matches [A-Za-z_][A-Za-z0-9_]*, optional `export `), values of
 # KEY/TOKEN/SECRET/PASSWORD-named variables must be empty.
-# Protected-path rule (a.2.1): `.env*` content is read ONLY where the filesystem permits it.
+# Protected-path rule (a.2.1, a.3): `.env*` content is read ONLY where the filesystem permits it.
 # env_readable(path) = regular file in the working tree, not a symlink, and a 1-byte read works.
-#   * CI: every .env.example is readable, so there is no protected path and content is ALWAYS
-#     scanned (working tree, index blob, history, tag-only blobs, strict format check).
-#   * Agent sandbox: for each .env.example that is NOT readable the content is read from NO
+#   * CI (CI or GITHUB_ACTIONS set): ANY .env.example that is not readable FAILS ("protected path
+#     in CI - cannot verify"), never skipped. Readable ones are fully scanned (working tree, index
+#     blob, history, tag-only blobs, strict format check).
+#   * Everywhere: a `.env.example` whose index mode is 120000 (symlink) or 160000 (gitlink), or
+#     that is a symlink in the working tree, FAILS (path-only checks).
+#   * Agent sandbox (CI unset): for each .env.example that is NOT readable the content is read from NO
 #     source: it is skipped by exact path in the index scan, excluded from `git log -p`
-#     (:(exclude,literal)<path>), skipped in the tag-only blob scan (blobs named by that path) and
-#     in the strict-format check. `skipped content scan of <path> (protected path; checked in CI)`
+#     (:(exclude,literal)<path>), skipped in the tag-only blob scan (blobs named by that path; no
+#     cat-file, not even -t, is run on them) and in the strict-format check. `skipped content scan of <path> (protected path; checked in CI)`
 #     is printed. Path-only checks (tracked .env, history paths, symlinks) run everywhere.
 # Symlinks are never followed. A symlink to a .env* target (other than .env.example) fails.
-# Read and enumeration errors fail CLOSED.
+# Read and enumeration errors fail CLOSED (including an object git cannot read).
 #
 # Known limitations (not detected): base64-encoded or split keys; the content of submodules;
 # unreachable objects (dangling blobs, reflog-only commits); generic-pattern false positives on
@@ -60,6 +67,9 @@ P_BEARER='Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,}'
 P_URL='://[^/[:space:]:@]+:[^/[:space:]@]+@'
 P_GEN='(api[_-]?key|secret|token|password)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./+=-]{16,}'
 PATTERN="($VENDOR|$P_BEARER|$P_URL|$P_GEN)"
+
+IN_CI=0
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then IN_CI=1; fi
 
 # THE definition of a protected env basename (bash and awk both use this regex).
 ENV_RE='^[.]env([.].*)?$'
@@ -99,10 +109,37 @@ is_prot() {
 # print_skips: one stdout line per protected path.
 print_skips() {
   local x
+  [ "$IN_CI" = 0 ] || return 0 # in CI a protected path is a failure (P record), never a skip
   [ "${#PROT[@]}" -gt 0 ] || return 0
   for x in "${PROT[@]}"; do
     echo "gate_secrets: skipped content scan of $(rp "$x") (protected path; checked in CI)"
   done
+}
+# prot_records: in CI every protected .env.example path is a failure.
+prot_records() {
+  local x
+  { [ "$IN_CI" = 1 ] && [ "${#PROT[@]}" -gt 0 ]; } || return 0
+  for x in "${PROT[@]}"; do echo "P|$(rp "$x")"; done
+}
+# link_records: Y for any .env.example that is a symlink/gitlink in the index or a symlink on
+# disk. Path-only (no content read), runs in every mode. Needs compute_prot's file lists.
+link_records() {
+  local rec meta path mode sha stage f
+  if git ls-files -s -z >"$TMPD/l_idx" 2>"$TMPD/l_idx.err" && [ ! -s "$TMPD/l_idx.err" ]; then
+    while IFS= read -r -d '' rec; do
+      meta="${rec%%$'\t'*}"
+      path="${rec#*$'\t'}"
+      read -r mode sha stage <<<"$meta"
+      if is_example "$path" && { [ "$mode" = 120000 ] || [ "$mode" = 160000 ]; }; then
+        echo "Y|$(rp "$path") (index mode $mode)"
+      fi
+    done <"$TMPD/l_idx"
+  else
+    echo "D|index"
+  fi
+  while IFS= read -r -d '' f; do
+    if is_example "$f" && [ -L "$f" ]; then echo "Y|$(rp "$f") (working-tree symlink)"; fi
+  done < <(cat "$TMPD/p_tracked" "$TMPD/p_others" | sort -zu)
 }
 # is_env_target <link-target>: same definition applied to a symlink target.
 is_env_target() {
@@ -111,9 +148,9 @@ is_env_target() {
   is_env_path "$t"
 }
 
-# rp <string>: print the string, or <redacted-path> if it matches a vendor pattern.
+# rp <string>: print the string, or <redacted-path> if it matches a vendor or generic pattern.
 rp() {
-  if grep -qaE -e "$VENDOR" <<<"$1"; then printf '<redacted-path>'; else printf '%s' "$1"; fi
+  if grep -qaE -e "$PATTERN" <<<"$1"; then printf '<redacted-path>'; else printf '%s' "$1"; fi
 }
 
 # scan_lines <file>: prints matching line numbers (never text). rc 2 = read error (fail closed).
@@ -234,7 +271,7 @@ name_hits() {
 
 # msg_hits <C|G> <file>: ids of records (header line \001<id>) that contain a vendor match.
 msg_hits() {
-  { grep -aEn -e "^$HDR[0-9a-f]{40,64}\$|$VENDOR" "$2" || true; } |
+  { grep -aEn -e "^$HDR[0-9a-f]{40,64}\$|$PATTERN" "$2" || true; } |
     awk -v t="$1" -v h="$HDR" '
       { sub(/^[0-9]+:/, "") }
       substr($0, 1, 1) == h { c = substr($0, 2, 12); next }
@@ -246,16 +283,21 @@ history_scan() {
   if [ -z "$(git for-each-ref --count=1 --format=x 2>/dev/null)" ]; then
     git rev-parse --verify -q HEAD >/dev/null 2>&1 || return 0
   fi
-  local c f rc sha path line blob="$TMPD/hblob"
+  local c f rc sha path line otype blob="$TMPD/hblob"
 
   # 1. added lines of every commit (binaries as text, merges against the first parent).
-  local pathspec=() x
-  if [ "${#PROT[@]}" -gt 0 ]; then
-    pathspec=(--full-history -- .)
-    for x in "${PROT[@]}"; do pathspec+=(":(exclude,literal)$x"); done
-  fi
-  if git log -p --text --all --no-color --no-ext-diff --no-textconv --diff-merges=first-parent \
-    --format='commit %H' "${pathspec[@]+"${pathspec[@]}"}" >"$TMPD/hist" 2>/dev/null; then
+  #    Pass A: everything except `.env` and `.env.*` (this also drops .env.example, which git
+  #    pathspecs cannot re-include). Their content is never requested from git.
+  #    Pass B: `.env.example` only, minus the protected (unreadable) paths.
+  local pathspec=() x lopts=(-p --text --all --no-color --no-ext-diff --no-textconv
+    --diff-merges=first-parent --full-history)
+  local hist_ok=1
+  git log "${lopts[@]}" --format='commit %H' -- . ':(exclude,glob)**/.env' \
+    ':(exclude,glob)**/.env.*' >"$TMPD/hist" 2>/dev/null || hist_ok=0
+  pathspec=(-- ":(glob)**/$EX_NAME")
+  for x in "${PROT[@]+"${PROT[@]}"}"; do pathspec+=(":(exclude,literal)$x"); done
+  git log "${lopts[@]}" --format='commit %H' "${pathspec[@]}" >>"$TMPD/hist" 2>/dev/null || hist_ok=0
+  if [ "$hist_ok" = 1 ]; then
     { grep -aE -e "^(commit [0-9a-f]+|diff --git .*|@@ .*|\\+.*$VENDOR.*)$" "$TMPD/hist" || true; } |
       awk -v re="$ENV_RE" '
         /^commit [0-9a-f]+$/ { c = substr($2, 1, 12); next }
@@ -292,7 +334,33 @@ history_scan() {
   else
     echo "E|(history: cannot read commit messages)"
   fi
-  if git for-each-ref refs/tags --format='%01%(objectname)%0a%(contents)' >"$TMPD/tags" 2>/dev/null; then
+  # Every ref that points at an annotated tag: peel nested tags (tag -> tag -> ...) and scan
+  # the full tag object (headers + message) of each layer.
+  if git for-each-ref --format='%(objectname) %(objecttype)' >"$TMPD/refs" 2>/dev/null; then
+    : >"$TMPD/tags"
+    : >"$TMPD/seentags"
+    local tsha ttype depth tobj ttyp
+    while read -r tsha ttype; do
+      depth=0
+      while [ "$ttype" = tag ] && [ "$depth" -lt 200 ]; do
+        depth=$((depth + 1))
+        if grep -qx -- "$tsha" "$TMPD/seentags"; then break; fi
+        echo "$tsha" >>"$TMPD/seentags"
+        printf '\001%s\n' "$tsha" >>"$TMPD/tags"
+        if ! git cat-file tag "$tsha" >>"$TMPD/tags" 2>/dev/null </dev/null; then
+          echo "E|(history: cannot read tag object ${tsha:0:12})"
+          break
+        fi
+        tobj="$(git cat-file tag "$tsha" 2>/dev/null </dev/null | sed -n 's/^object //p;/^$/q' | head -n1)"
+        ttyp="$(git cat-file tag "$tsha" 2>/dev/null </dev/null | sed -n 's/^type //p;/^$/q' | head -n1)"
+        if [ -z "$tobj" ] || [ -z "$ttyp" ]; then
+          echo "E|(history: malformed tag object ${tsha:0:12})"
+          break
+        fi
+        tsha="$tobj"
+        ttype="$ttyp"
+      done
+    done <"$TMPD/refs"
     msg_hits G "$TMPD/tags"
   else
     echo "E|(history: cannot read tags)"
@@ -305,13 +373,29 @@ history_scan() {
       git rev-list --objects --stdin <"$TMPD/commits" >"$TMPD/reach" 2>/dev/null || echo "E|(history: reachability)"
     fi
     awk 'NR == FNR { r[$1] = 1; next } !($1 in r) { print }' "$TMPD/reach" "$TMPD/all" >"$TMPD/cand"
+    # L7: .env / .env.* paths in trees reachable only from tags (path-only; no object is read).
+    # A name that has children (`name/...` also listed) is a directory, not an env file.
+    awk -v re="$ENV_RE" '
+      { sha = $1; p = ""; if (length($0) > length(sha) + 1) p = substr($0, length(sha) + 2)
+        if (p == "") next
+        n++; P[n] = p; S[n] = sha; d = p
+        while (sub(/\/[^\/]*$/, "", d) && d != "") dir[d] = 1 }
+      END { for (i = 1; i <= n; i++) { b = P[i]; sub(/^.*\//, "", b)
+              if (b ~ re && b != ".env.example" && !(P[i] in dir)) print "L|" substr(S[i], 1, 12) "|" P[i] } }
+    ' "$TMPD/cand" >"$TMPD/cand.l"
+    while IFS='|' read -r _ c f; do echo "L|$c:$(rp "$f")"; done <"$TMPD/cand.l"
     while IFS= read -r line; do
       sha="${line%% *}"
       path=""
       if [ "$line" != "$sha" ]; then path="${line#* }"; fi
-      [ "$(git cat-file -t "$sha" 2>/dev/null </dev/null)" = blob ] || continue
+      # protected-path checks come BEFORE any object access (cat-file -t included)
       if [ -n "$path" ] && is_env_path "$path"; then continue; fi
       if [ -n "$path" ] && is_prot "$path"; then continue; fi # protected: blob not read
+      if ! otype="$(git cat-file -t "$sha" 2>/dev/null </dev/null)"; then
+        echo "E|(cannot read object ${sha:0:12})"
+        continue
+      fi
+      [ "$otype" = blob ] || continue
       if ! git cat-file blob "$sha" >"$blob" 2>/dev/null </dev/null; then echo "E|(blob ${sha:0:12})"; continue; fi
       rc=0
       grep -aqE -e "$VENDOR" "$blob" 2>/dev/null || rc=$?
@@ -334,12 +418,14 @@ report() {
     fail=1
   done <<'EOF'
 D|cannot enumerate files (fail closed) (git reported an error listing:)
+P|protected path in CI — cannot verify (.env.example not readable; path only):
+Y|.env.example is a symlink or gitlink (path only):
 W|tracked env file(s) (path only):
 H|possible secrets at (file:line or commit:file):
 E|unreadable/unscannable item(s) (fail closed):
 S|symlink(s) to .env* target:
 N|file name(s) match a secret pattern (path redacted):
-L|.env* path(s) exist in history (commit:path, content never read):
+L|.env* path(s) exist in history (commit-or-tag-tree:path; path only, excluded from the content scan):
 M|malformed .env.example line(s) (path:line, content never shown):
 V|non-empty value for secret-named variable(s) (path: NAME only):
 C|commit message(s) match a secret pattern (commit ids only):
@@ -433,7 +519,7 @@ fi
 
 if [ "${1:-}" = "--history" ]; then
   compute_prot
-  recs="$(history_scan | sort -u)"
+  recs="$({ prot_records; link_records; history_scan; } | sort -u)"
   report "gate_secrets --history" "$recs"
   print_skips
   if [ "$fail" -ne 0 ]; then exit 1; fi
@@ -459,11 +545,16 @@ records="$(
     while IFS= read -r -d '' f; do
       if is_env_path "$f"; then echo "W|$(rp "$f")"; fi
     done <"$TMPD/tracked"
+    prot_records
+    link_records
     name_hits "$TMPD/paths"
     scan_files <"$TMPD/paths"
     index_scan
   } | sort -u
 )"
+if [ "$IN_CI" = 1 ]; then # a late-appearing protected path (race) is also a CI failure
+  records="$(printf '%s\n' "$records" | sed 's/^K|/P|/' | sort -u)"
+fi
 report "gate_secrets" "$records"
 
 # Stdout notes: .env.example skips and successful checks.

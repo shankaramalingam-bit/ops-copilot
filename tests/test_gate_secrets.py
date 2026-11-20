@@ -46,9 +46,17 @@ FAKES = {
 }
 
 
-def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def base_env(ci: bool = False) -> dict[str, str]:
+    """Hermetic env. CI markers are removed unless ci=True (the gate's mode depends on them)."""
+    env = {k: v for k, v in os.environ.items() if k not in ("CI", "GITHUB_ACTIONS")}
+    if ci:
+        env["CI"] = "1"
+    return {**env, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+
+
+def run(repo: Path, *args: str, ci: bool = False) -> subprocess.CompletedProcess[str]:
     # hermetic: a user-level global gitignore (e.g. ".env*") must not hide test files
-    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+    env = base_env(ci)
     return subprocess.run(
         ["bash", str(SCRIPT), *args], cwd=repo, env=env, capture_output=True, text=True, check=False
     )
@@ -656,13 +664,10 @@ def git_shim(tmp: Path) -> tuple[dict[str, str], Path]:
     return {"PATH": f"{bindir}:{os.environ['PATH']}"}, log
 
 
-def run_env(repo: Path, extra: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
-    env = {
-        **os.environ,
-        **extra,
-        "GIT_CONFIG_GLOBAL": os.devnull,
-        "GIT_CONFIG_SYSTEM": os.devnull,
-    }
+def run_env(
+    repo: Path, extra: dict[str, str], *args: str, ci: bool = False
+) -> subprocess.CompletedProcess[str]:
+    env = {**base_env(ci), **extra}
     return subprocess.run(
         ["bash", str(SCRIPT), *args], cwd=repo, env=env, capture_output=True, text=True, check=False
     )
@@ -777,3 +782,267 @@ def test_a21_tag_only_blob_at_protected_path_skipped(repo: Path) -> None:
         undeny(repo, ENV_EXAMPLE, "chmod")
     assert res.returncode == 0, (res.stdout, res.stderr)
     assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
+
+
+# ---- a.3: fail closed in CI; symlink/gitlink; no .env inflation; tag/tree coverage
+CI_MSG = "protected path in CI"
+SYM_MSG = "symlink or gitlink"
+
+
+def loose(repo: Path, sha: str) -> Path:
+    return repo / ".git" / "objects" / sha[:2] / sha[2:]
+
+
+def blob_sha(repo: Path, text: str) -> str:
+    return git(repo, "hash-object", "-w", "--stdin", input=text)
+
+
+def tag_tree(repo: Path, entries: str, tagname: str = "tonly") -> str:
+    tree = git(repo, "mktree", input=entries)
+    git(repo, "tag", tagname, tree)
+    return tree
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+@pytest.mark.parametrize("how", ["chmod", "dir"])
+@pytest.mark.parametrize("mode", ["", "--history"])
+@pytest.mark.parametrize("marker", ["CI", "GITHUB_ACTIONS"])
+def test_a3_h1_protected_example_fails_in_ci(repo: Path, how: str, mode: str, marker: str) -> None:
+    plant(repo)
+    deny(repo, ENV_EXAMPLE, how)
+    args = (mode,) if mode else ()
+    try:
+        res = run_env(repo, {marker: "true"}, *args)
+    finally:
+        undeny(repo, ENV_EXAMPLE, how)
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert CI_MSG in res.stderr and "cannot verify" in res.stderr, res.stderr
+    assert ENV_EXAMPLE in res.stderr
+    assert "skipped content scan" not in res.stdout
+
+
+@pytest.mark.parametrize("mode", ["", "--history"])
+def test_a3_ci_readable_example_still_green(repo: Path, mode: str) -> None:
+    args = (mode,) if mode else ()
+    res = run(repo, *args, ci=True)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a3_sandbox_still_skips_without_ci(repo: Path) -> None:
+    plant(repo)
+    deny(repo, ENV_EXAMPLE, "chmod")
+    try:
+        res = run(repo)
+        hist = run(repo, "--history")
+    finally:
+        undeny(repo, ENV_EXAMPLE, "chmod")
+    assert res.returncode == 0 and hist.returncode == 0, (res.stderr, hist.stderr)
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in res.stdout
+    assert f"skipped content scan of {ENV_EXAMPLE} {SKIP}" in hist.stdout
+
+
+@pytest.mark.parametrize("ci", [False, True])
+@pytest.mark.parametrize("mode", ["", "--history"])
+def test_a3_symlink_example_after_secret_commit_fails(repo: Path, ci: bool, mode: str) -> None:
+    secret, _ = plant(repo)
+    (repo / ENV_EXAMPLE).unlink()
+    os.symlink("README.md", repo / ENV_EXAMPLE)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "swap for symlink")
+    args = (mode,) if mode else ()
+    res = run(repo, *args, ci=ci)
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert SYM_MSG in res.stderr, res.stderr
+    assert secret not in res.stdout + res.stderr
+
+
+def test_a3_working_tree_symlink_example_fails_even_if_index_regular(repo: Path) -> None:
+    (repo / ENV_EXAMPLE).unlink()
+    os.symlink("README.md", repo / ENV_EXAMPLE)  # not staged: index still has the regular file
+    for args in ((), ("--history",)):
+        res = run(repo, *args)
+        assert res.returncode == 1, (args, res.stdout, res.stderr)
+        assert SYM_MSG in res.stderr
+
+
+@pytest.mark.parametrize("mode_bits", ["160000", "120000"])
+@pytest.mark.parametrize("ci", [False, True])
+@pytest.mark.parametrize("mode", ["", "--history"])
+def test_a3_index_gitlink_or_symlink_example_fails(
+    repo: Path, mode_bits: str, ci: bool, mode: str
+) -> None:
+    if mode_bits == "160000":
+        sha = git(repo, "rev-parse", "HEAD")
+    else:
+        sha = blob_sha(repo, "README.md")
+    git(repo, "update-index", "--add", "--cacheinfo", f"{mode_bits},{sha},sub/{ENV_EXAMPLE}")
+    args = (mode,) if mode else ()
+    res = run(repo, *args, ci=ci)
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert SYM_MSG in res.stderr, res.stderr
+    assert f"sub/{ENV_EXAMPLE}" in res.stderr
+
+
+def test_a3_symlink_example_leaves_other_link_names_alone(repo: Path) -> None:
+    """Negative control: only a link NAMED .env.example is rejected."""
+    os.symlink(ENV_EXAMPLE, repo / "example-link")
+    assert run(repo).returncode == 0
+    assert run(repo, "--history").returncode == 0
+
+
+def test_a3_ci_workflow_runs_secrets_history_before_gate_loop() -> None:
+    text = (SCRIPT.parent.parent / ".github" / "workflows" / "ci.yml").read_text()
+    hist = text.index("gate_secrets.sh --history")
+    loop = text.index("scripts/gate_*.sh")
+    sync = text.index("uv sync")
+    assert hist < loop and hist < sync, "history scan must precede any repo-code-running step"
+    assert text.count("gate_secrets.sh --history") == 1
+
+
+def log_p_calls(log: Path) -> list[str]:
+    return [ln for ln in log.read_text().splitlines() if ln.startswith("log ") and " -p " in ln]
+
+
+def test_a3_m4_history_log_excludes_env_paths(repo: Path, tmp_path: Path) -> None:
+    extra, log = git_shim(tmp_path)
+    res = run_env(repo, extra, "--history")
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    calls = log_p_calls(log)
+    assert calls, "positive control: content-reading git log was run"
+    base = ".en" + "v"
+    main = [c for c in calls if f":(exclude,glob)**/{base}" in c]
+    assert main, calls
+    for c in main:
+        assert f":(exclude,glob)**/{base}.*" in c, c
+    # the .env.example content pass is separate and does not carry the .env excludes
+    ex_pass = [c for c in calls if f"**/{ENV_EXAMPLE}" in c and "exclude,glob" not in c]
+    assert ex_pass, calls
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a3_m4_unreadable_env_object_does_not_break_history(repo: Path) -> None:
+    secret = FAKES["groq"]()
+    paths = (".en" + "v", "svc/.en" + "v.local")
+    shas = []
+    for path in paths:
+        sha = blob_sha(repo, "K=" + secret + "\n")
+        shas.append(sha)
+        git(repo, "update-index", "--add", "--cacheinfo", f"100644,{sha},{path}")
+    git(repo, "commit", "-qm", "oops")
+    git(repo, "rm", "-q", "--cached", *paths)
+    git(repo, "commit", "-qm", "undo")
+    for sha in shas:
+        loose(repo, sha).chmod(0)
+    try:
+        res = run(repo, "--history")
+    finally:
+        for sha in shas:
+            loose(repo, sha).chmod(0o444)
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert "git log -p failed" not in res.stderr, res.stderr
+    assert "unreadable" not in res.stderr, res.stderr
+    assert "svc/.en" + "v.local" in res.stderr  # path-only L record
+    assert secret not in res.stdout + res.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a3_l5_protected_blob_not_touched_by_cat_file(repo: Path, tmp_path: Path) -> None:
+    secret = FAKES["groq"]()
+    blob = blob_sha(repo, "NOTE=" + secret + "\n")
+    tag_tree(repo, f"100644 blob {blob}\t{ENV_EXAMPLE}\n")
+    deny(repo, ENV_EXAMPLE, "chmod")
+    extra, log = git_shim(tmp_path)
+    try:
+        res = run_env(repo, extra, "--history")
+    finally:
+        undeny(repo, ENV_EXAMPLE, "chmod")
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert log.exists(), "positive control: shim saw calls"
+    assert blob not in log.read_text(), "cat-file touched the protected blob (even -t)"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores chmod 000")
+def test_a3_l5_unreadable_object_fails_closed(repo: Path) -> None:
+    blob = blob_sha(repo, "harmless\n")
+    tag_tree(repo, f"100644 blob {blob}\tnotes.txt\n")
+    loose(repo, blob).chmod(0)
+    try:
+        res = run(repo, "--history")
+    finally:
+        loose(repo, blob).chmod(0o444)
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert "cannot read object" in res.stderr, res.stderr
+
+
+def mk_tag_of(repo: Path, target: str, ttype: str, name: str, message: str) -> str:
+    body = (
+        f"object {target}\ntype {ttype}\ntag {name}\n"
+        f"tagger t <t@example.invalid> 1700000000 +0000\n\n{message}\n"
+    )
+    return git(repo, "mktag", input=body)
+
+
+def test_a3_l6_nested_annotated_tag_message_scanned(repo: Path) -> None:
+    secret = FAKES["ghp"]()
+    head = git(repo, "rev-parse", "HEAD")
+    inner = mk_tag_of(repo, head, "commit", "inner", "release " + secret)
+    outer = mk_tag_of(repo, inner, "tag", "outer", "clean message")
+    git(repo, "update-ref", "refs/tags/outer", outer)
+    res = run(repo, "--history")
+    assert_red(res, "tag message", secret)
+    assert_no_leak(res, secret)
+
+
+def test_a3_l6_nested_tag_negative_control(repo: Path) -> None:
+    head = git(repo, "rev-parse", "HEAD")
+    inner = mk_tag_of(repo, head, "commit", "inner", "fine")
+    outer = mk_tag_of(repo, inner, "tag", "outer", "also fine")
+    git(repo, "update-ref", "refs/tags/outer", outer)
+    assert run(repo, "--history").returncode == 0
+
+
+def test_a3_l7_env_path_in_tag_only_tree_fails(repo: Path) -> None:
+    blob = blob_sha(repo, "A=1\n")
+    tag_tree(repo, f"100644 blob {blob}\t.en" + "v\n")
+    res = run(repo, "--history")
+    assert res.returncode == 1, (res.stdout, res.stderr)
+    assert ".en" + "v" in res.stderr and "history" in res.stderr
+
+
+def test_a3_l7_nested_env_local_in_tag_only_tree_fails(repo: Path) -> None:
+    blob = blob_sha(repo, "A=1\n")
+    sub = git(repo, "mktree", input=f"100644 blob {blob}\t.en" + "v.local\n")
+    tag_tree(repo, f"040000 tree {sub}\tsvc\n")
+    assert_red(run(repo, "--history"), "svc/.en" + "v.local")
+
+
+def test_a3_l7_env_named_directory_is_not_an_env_file(repo: Path) -> None:
+    blob = blob_sha(repo, "A=1\n")
+    sub = git(repo, "mktree", input=f"100644 blob {blob}\tx\n")
+    tag_tree(repo, f"040000 tree {sub}\t.en" + "v\n")
+    res = run(repo, "--history")
+    assert res.returncode == 0, (res.stdout, res.stderr)
+
+
+def test_a3_l8_generic_pattern_path_redacted(repo: Path) -> None:
+    name = "api_" + "key=" + "a" * 20 + ".txt"
+    (repo / name).write_text(FAKES["groq"]() + "\n")
+    res = run(repo)
+    assert res.returncode == 1
+    assert "<redacted-path>" in res.stderr
+    assert "a" * 20 not in res.stderr
+
+
+def test_a3_l8_commit_message_generic_pattern(repo: Path) -> None:
+    secret = FAKES["json_password"]()
+    git(repo, "commit", "-q", "--allow-empty", "-m", "oops " + secret)
+    res = run(repo, "--history")
+    assert_red(res, "commit message", "ab.cd/ef+gh=ij-klmnop")
+
+
+def test_a3_l8_tag_message_generic_pattern(repo: Path) -> None:
+    secret = FAKES["plain_apikey"]()
+    git(repo, "tag", "-a", "v1", "-m", "release " + secret)
+    res = run(repo, "--history")
+    assert_red(res, "tag message", "a" * 20)

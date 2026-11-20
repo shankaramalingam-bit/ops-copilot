@@ -12,13 +12,16 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # First gate step, before any step that runs repo code (dependency install, tests) can alter files.
+      - run: |
+          bash scripts/gate_secrets.sh
+          bash scripts/gate_secrets.sh --history
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           version: "0.12.5"
       - run: uv python install 3.12.14
       - run: uv sync --frozen
       - run: for g in scripts/gate_*.sh; do echo "::group::$g"; bash "$g"; echo "::endgroup::"; done
-      - run: bash scripts/gate_secrets.sh --history
   deploy:
     needs: gates            # depends ONLY on the gate scripts
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
