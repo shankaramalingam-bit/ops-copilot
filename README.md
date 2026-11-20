@@ -37,13 +37,15 @@ Then open http://localhost:8000 (or `make run`). Needs Ollama running locally. D
 
 ```bash
 make notebook                                   # executes notebooks/01_rag_walkthrough.ipynb (needs Ollama)
-uv run python eval/run_eval.py                  # 15-question eval -> eval/latest.json
+uv run python eval/run_eval.py                  # 15-question eval -> eval/latest.json (see judge rules below)
 uv run python eval/calibrate.py                 # gate-threshold calibration on the held-out set
 uv run pytest -q                                # offline tests
 for g in scripts/gate_*.sh; do bash "$g"; done  # all gates (lint, typecheck, tests, secrets)
 ```
 
 The eval sends corpus text to the LLM, so it refuses to run unless the provider is local Ollama on a loopback host. To run it against a remote provider (for example `LLM_PROVIDER=groq`) or a non-loopback Ollama, set `EVAL_ALLOW_REMOTE=1` deliberately.
+
+The eval loads `.env` the same way the app does. The judge defaults to the generator model; set `EVAL_JUDGE_MODEL` to use another. It refuses to run (exit 2) if the judge is any 8B model, is smaller than the generator, or a model size cannot be parsed from its name, so the small local `llama3.1:8b` is no longer accepted as generator or judge. Example: `LLM_PROVIDER=groq GROQ_MODEL=llama-3.3-70b-versatile EVAL_ALLOW_REMOTE=1 uv run python eval/run_eval.py`. It prints `generator model=... judge model=...` (names only, never the key).
 
 ## Architecture
 

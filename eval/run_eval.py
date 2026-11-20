@@ -4,7 +4,11 @@ Builds the real Pipeline (OllamaEmbeddings + ChatOllama, temperature 0), asks ev
 hybrid mode, computes the metrics in code and writes eval/results/<timestamp>.json (full
 records) and eval/latest.json (the shape the UI reads).
 
-Usage (needs Ollama): LLM_PROVIDER=ollama OLLAMA_MODEL=llama3.1:8b python eval/run_eval.py
+Usage (loads .env like the app does; EVAL_ALLOW_REMOTE=1 is needed for a remote provider):
+  LLM_PROVIDER=groq GROQ_MODEL=llama-3.3-70b-versatile EVAL_ALLOW_REMOTE=1 \
+      python eval/run_eval.py
+Optional EVAL_JUDGE_MODEL names the judge model (default: the generator model). The run refuses
+(exit 2) if the judge is any 8B model, smaller than the generator, or a size cannot be parsed.
 
 Per-question `passed` (see eval/report.md):
   unanswerable: refused.
@@ -13,12 +17,13 @@ Per-question `passed` (see eval/report.md):
                 docs among the valid citations; ambiguous also needs a labelled "If you mean"
                 reading.
 
-Faithfulness limitation: the judge is the same small local model (llama3.1:8b) that wrote the
-answer, so it shares the generator's blind spots and is noisy. Treat it as a smoke signal.
+Faithfulness limitation: by default the judge is the same model that wrote the answer, so it
+shares the generator's blind spots. EVAL_JUDGE_MODEL can name a different (not smaller) judge.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import ipaddress
 import json
 import math
@@ -129,6 +134,51 @@ def guard_local_provider(settings: Any, env: Mapping[str, str] | None = None) ->
         )
         return 2
     return None
+
+
+_SIZE_RE = re.compile(r"(?<![a-z0-9.])(\d+(?:\.\d+)?)b(?![a-z])")
+_MOE_RE = re.compile(r"\d+x\d+(?:\.\d+)?b")
+BANNED_JUDGE_SIZE_B = 8.0
+
+
+def parse_model_size_b(name: str) -> float | None:
+    """Parameter count in billions from a model name, or None if absent/ambiguous (fail closed).
+
+    llama-3.3-70b-versatile -> 70, llama3.1:8b -> 8, qwen3:0.6b -> 0.6. MoE names (8x7b) and
+    names with several different size tokens are None."""
+    low = name.strip().lower()
+    if _MOE_RE.search(low):
+        return None
+    sizes = {float(m.group(1)) for m in _SIZE_RE.finditer(low)}
+    return sizes.pop() if len(sizes) == 1 else None
+
+
+def check_judge_model(generator: str, judge: str) -> str | None:
+    """None if the judge may be used; otherwise a refusal message (model names only)."""
+    g, j = parse_model_size_b(generator), parse_model_size_b(judge)
+    if g is None or j is None:
+        return (
+            f"refusing: cannot parse an unambiguous parameter size from generator model "
+            f"{generator!r} or judge model {judge!r}"
+        )
+    if j == BANNED_JUDGE_SIZE_B:
+        return f"refusing: judge model {judge!r} is an 8B model"
+    if j < g:
+        return (
+            f"refusing: judge model {judge!r} ({j:g}B) is smaller than "
+            f"generator {generator!r} ({g:g}B)"
+        )
+    return None
+
+
+def generator_model_name(settings: Any) -> str:
+    return str(settings.groq_model if settings.llm_provider == "groq" else settings.ollama_model)
+
+
+def judge_settings(settings: Any, judge_model: str) -> Any:
+    """Same provider and credentials as the generator, with the judge model name."""
+    field = "groq_model" if settings.llm_provider == "groq" else "ollama_model"
+    return dataclasses.replace(settings, **{field: judge_model})
 
 
 # ---------------------------------------------------------------- pure metric functions
@@ -317,17 +367,25 @@ def _notes(rec: dict[str, Any], cov: bool | None) -> str:
 
 
 def main() -> int:
-    from ops_copilot.config import Settings
+    from ops_copilot.config import Settings, load_env_file
     from ops_copilot.llm import get_chat_model
     from ops_copilot.pipeline import Pipeline
 
+    load_env_file()  # same as the app's entry point; does not override existing env
     s = Settings.from_env()
     refusal = guard_local_provider(s)
     if refusal is not None:
         return refusal
+    generator_model = generator_model_name(s)
+    judge_model = os.environ.get("EVAL_JUDGE_MODEL", "").strip() or generator_model
+    print(f"generator model={generator_model} judge model={judge_model}", flush=True)
+    problem = check_judge_model(generator_model, judge_model)
+    if problem is not None:
+        print(problem, file=sys.stderr)
+        return 2
     qs = load_questions()
     pipe = Pipeline(s)
-    judge = get_chat_model(s)  # same model, temperature 0
+    judge = get_chat_model(judge_settings(s, judge_model))  # temperature 0
     recs: list[dict[str, Any]] = []
     full: list[dict[str, Any]] = []
     verdicts: list[list[bool]] = []
@@ -418,15 +476,24 @@ def main() -> int:
 
     metrics = compute_metrics(recs, verdicts)
     run_at = datetime.now(UTC).isoformat(timespec="seconds")
-    latest = build_latest(run_at, s.ollama_model, s.embed_model, s.gate_threshold, metrics, recs)
+    latest = build_latest(run_at, generator_model, s.embed_model, s.gate_threshold, metrics, recs)
     (EVAL_DIR / "results").mkdir(exist_ok=True)
     stamp = run_at.replace(":", "").replace("-", "").replace("+0000", "Z").replace("+00:00", "Z")
-    detail = {**latest, "questions": full, "kpi_pass": kpi_status(metrics)}
+    # provider/model names go in the detail file only: latest.json keeps its exact schema
+    detail = {
+        **latest,
+        "provider": s.llm_provider,
+        "generator_model": generator_model,
+        "judge_model": judge_model,
+        "questions": full,
+        "kpi_pass": kpi_status(metrics),
+    }
     (EVAL_DIR / "results" / f"{stamp}.json").write_text(json.dumps(detail, indent=2) + "\n")
     (EVAL_DIR / "latest.json").write_text(json.dumps(latest, indent=2) + "\n")
 
     print("\n=== summary ===")
-    print(f"run_at={run_at} model={s.ollama_model} embed={s.embed_model} gate={s.gate_threshold}")
+    print(f"run_at={run_at} model={generator_model} judge={judge_model}")
+    print(f"embed={s.embed_model} gate={s.gate_threshold}")
     for k in METRIC_KEYS:
         print(f"  {k:<18} {metrics[k]}")
     for k, ok in kpi_status(metrics).items():
