@@ -1,0 +1,15 @@
+{
+  "as_of": "2026-11-20",
+  "open_pos": 12,
+  "receipts_today": 4,
+  "open_discrepancies": 4,
+  "supplier_quality_pct": 98.1,
+  "key_account_fill_rate": {
+    "target_pct": 98.0,
+    "overall_pct": 98.0,
+    "accounts": [
+      {"account": "Harbor Point Grocers", "fill_rate_pct": 97.4},
+      {"account": "Cascade Medical Supply", "fill_rate_pct": 98.6}
+    ]
+  }
+}

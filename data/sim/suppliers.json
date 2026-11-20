@@ -1,0 +1,13 @@
+{
+  "as_of": "2026-11-20",
+  "suppliers": [
+    {"name": "Granite Fasteners", "status": "approved", "units_received_90d": 24000, "units_rejected_90d": 120, "quality_pct": 99.5, "ncr_dates": []},
+    {"name": "Bluewater Packaging", "status": "probation", "probation_since": "2026-10-14", "units_received_90d": 18000, "units_rejected_90d": 900, "quality_pct": 95.0,
+     "ncr_dates": ["2026-06-18", "2026-08-02", "2026-10-14"],
+     "ask": "Why is Bluewater Packaging on probation, and what happens to a supplier on probation?"},
+    {"name": "Summit Industrial Supply", "status": "approved", "units_received_90d": 15000, "units_rejected_90d": 150, "quality_pct": 99.0, "ncr_dates": []},
+    {"name": "Northfield Pallet Co", "status": "approved", "units_received_90d": 9000, "units_rejected_90d": 90, "quality_pct": 99.0, "ncr_dates": []},
+    {"name": "Redcliff Chemicals", "status": "approved", "units_received_90d": 6000, "units_rejected_90d": 60, "quality_pct": 99.0, "ncr_dates": []},
+    {"name": "Alder Lane Electronics", "status": "provisional", "provisional_since": "2026-09-01", "units_received_90d": 3000, "units_rejected_90d": 90, "quality_pct": 97.0, "ncr_dates": []}
+  ]
+}

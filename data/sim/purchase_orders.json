@@ -1,0 +1,25 @@
+{
+  "as_of": "2026-11-20",
+  "purchase_orders": [
+    {"po": "PO-2291", "supplier": "Granite Fasteners", "description": "Anchor bolt kits, 4,000 units", "total_usd": 40000, "created": "2026-11-17", "status": "awaiting Director of Operations", "approver": "Director of Operations", "sole_source": false,
+     "ask": "PO-2291 for $40,000 — who needs to approve it?"},
+    {"po": "PO-2294", "supplier": "Summit Industrial Supply", "description": "Shrink wrap and strapping, quarterly lot", "total_usd": 12500, "created": "2026-11-18", "status": "awaiting Procurement Manager", "approver": "Procurement Manager", "sole_source": false,
+     "ask": "PO-2294 for $12,500 — who needs to approve it?"},
+    {"po": "PO-2296", "supplier": "Alder Lane Electronics", "description": "Handheld scanner batteries, proprietary pack", "total_usd": 18200, "created": "2026-11-18", "status": "awaiting Procurement Manager", "approver": "Procurement Manager", "sole_source": true, "sole_source_form": false,
+     "ask": "PO-2296 is a $18,200 sole-source purchase — what approval and paperwork does it need?"},
+    {"po": "PO-2297", "supplier": "Northfield Pallet Co", "description": "Annual pallet supply agreement", "total_usd": 135000, "created": "2026-11-19", "status": "awaiting CFO", "approver": "CFO", "sole_source": false,
+     "ask": "PO-2297 for $135,000 — who needs to approve it?"},
+    {"po": "PO-2288", "supplier": "Bluewater Packaging", "description": "Corrugated cartons, mixed sizes", "total_usd": 3200, "created": "2026-11-16", "status": "awaiting Buyer", "approver": "Buyer", "sole_source": false,
+     "ask": "PO-2288 for $3,200 — who needs to approve it?"},
+    {"po": "PO-2285", "supplier": "Summit Industrial Supply", "description": "Label stock, amended quantity", "total_usd": 6200, "original_total_usd": 4800, "created": "2026-11-12", "amended": "2026-11-19", "status": "awaiting Procurement Manager", "approver": "Procurement Manager", "sole_source": false,
+     "ask": "PO-2285 was $4,800 and was amended up to $6,200 — does it need to be re-approved, and by whom?"},
+    {"po": "PO-2270", "supplier": "Granite Fasteners", "description": "Rack bolts and washers", "total_usd": 8400, "created": "2026-11-04", "status": "open", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2274", "supplier": "Bluewater Packaging", "description": "Pallet wrap and edge protectors", "total_usd": 15600, "created": "2026-11-06", "status": "open", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2279", "supplier": "Redcliff Chemicals", "description": "Floor cleaning concentrate (hazmat)", "total_usd": 22000, "created": "2026-11-09", "status": "open", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2281", "supplier": "Summit Industrial Supply", "description": "Safety signage", "total_usd": 5000, "created": "2026-11-10", "status": "open", "approver": "Buyer", "sole_source": false},
+    {"po": "PO-2282", "supplier": "Northfield Pallet Co", "description": "Block pallets, 500 units", "total_usd": 9800, "created": "2026-11-05", "status": "open", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2269", "supplier": "Summit Industrial Supply", "description": "Stretch film cores, 1,000 units", "total_usd": 7600, "created": "2026-11-03", "status": "open", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2266", "supplier": "Alder Lane Electronics", "description": "Barcode label printer heads, 1,200 units", "total_usd": 17400, "created": "2026-10-30", "status": "received", "approver": "Procurement Manager", "sole_source": false},
+    {"po": "PO-2260", "supplier": "Granite Fasteners", "description": "Dock plate hardware", "total_usd": 2100, "created": "2026-10-22", "status": "closed", "approver": "Buyer", "sole_source": false}
+  ]
+}
