@@ -263,19 +263,6 @@ def test_probation_has_no_po_approval_rule() -> None:
     assert not re.search(r"\bPOs?\b|sign-off|approv", s, re.I)
 
 
-def test_approval_authority_only_in_pr001_and_wh005() -> None:
-    # Other docs may refer to the approval limits but must not name an approver role.
-    roles = r"(Buyer|Procurement Manager|Director of Operations|CFO|Supervisor|Control Manager)"
-    for doc_id in DOC_IDS:
-        if doc_id in ("PR-001", "WH-005"):
-            continue
-        for raw in _read(doc_id).splitlines():
-            line = raw.replace("Approved Supplier List", "ASL")
-            assert not (re.search(r"approv|sign-off", line, re.I) and re.search(roles, line)), (
-                f"{doc_id}: competing approval statement: {line}"
-            )
-
-
 # ------------------------------------------------- conflicting-number guard
 
 
@@ -315,7 +302,7 @@ NUMBER_RULES: dict[str, tuple[str, str]] = {
 @pytest.mark.parametrize("name", sorted(NUMBER_RULES))
 def test_governing_number_consistent_across_corpus(name: str) -> None:
     pattern, expected = NUMBER_RULES[name]
-    found = re.findall(pattern, _corpus())
+    found = re.findall(pattern, _corpus(), re.I)
     assert found, f"positive control empty for {name}"
     assert set(found) == {expected}, f"{name}: {found}"
 
@@ -379,3 +366,93 @@ def test_no_orders_permitted_to_suppliers_off_the_asl() -> None:
             checked = True
             assert prohibition.search(s), f"{d}: order to non-ASL supplier permitted: {s}"
     assert checked  # positive control: PR-001 §5.1 rejection sentence is seen
+
+
+# ------------------------------------------------------ broad authority guard
+
+AUTHORITY_DOCS = ("PR-001", "WH-005")  # the only docs allowed to state who approves
+
+_ROLE = re.compile(
+    r"\bbuyers?\b|procurement manager|director of operations|\bcfo\b|warehouse supervisors?|"
+    r"inventory control manager|customer service manager|quality manager|\bfinance\b|"
+    r"\b\w*\s*managers?\b|\bdirectors?\b|\bhead of\b",
+    re.I,
+)
+_AUTHORITY = re.compile(
+    r"approv\w*|sign(?:s|ed)?[ -]off|escalat\w*|\bagree\w*|authori[sz]\w*", re.I
+)
+MIN_ROLE_SENTENCES = 25  # positive control; 31 measured when written
+
+
+def _sentences_outside_authority_docs() -> list[tuple[str, str]]:
+    out = []
+    for d, s in _sentences():
+        if d in AUTHORITY_DOCS:
+            continue
+        out.append((d, s.replace("Approved Supplier List", "ASL")))
+    return out
+
+
+def test_role_positive_control() -> None:
+    n = sum(1 for _, s in _sentences_outside_authority_docs() if _ROLE.search(s))
+    assert n >= MIN_ROLE_SENTENCES, n
+
+
+def test_no_role_authority_pairing_outside_pr001_wh005() -> None:
+    for d, s in _sentences_outside_authority_docs():
+        # front matter owner_role is ownership, not authority
+        if s.startswith("owner_role:"):
+            continue
+        assert not (_ROLE.search(s) and _AUTHORITY.search(s)), f"{d}: authority claim: {s}"
+
+
+def test_no_escalation_anywhere_outside_pr001_wh005() -> None:
+    seen = 0
+    for d, s in _sentences_outside_authority_docs():
+        seen += 1
+        assert not re.search(r"escalat", s, re.I), f"{d}: escalation rule: {s}"
+    assert seen > 100  # positive control: sentences were actually scanned
+
+
+def test_fin001_no_senior_role_owns_exceptions() -> None:
+    seen = 0
+    for s in re.split(r"(?<=[.!?])\s+|\n+", _read("FIN-001")):
+        if re.search(r"exception", s, re.I):
+            seen += 1
+            assert not re.search(r"procurement manager|director|\bcfo\b", s, re.I), s
+    assert seen >= 3  # positive control
+
+
+# ------------------------------------------------------- paired-row tests
+
+
+def _row_map(section: str) -> dict[str, str]:
+    return {a: b for a, b in _table_rows(section)}
+
+
+def test_wh002_abc_cadence_rows_paired() -> None:
+    rows = _table_rows3(_section(_read("WH-002"), "2.2"))
+    assert [(a, c) for a, _, c in rows] == [
+        ("A", "Monthly"),
+        ("B", "Quarterly"),
+        ("C", "Twice a year (semi-annually)"),
+    ]
+
+
+def test_wh004_grade_rows_paired() -> None:
+    rows = _table_rows3(_section(_read("WH-004"), "4.1"))
+    assert [(a, c) for a, _, c in rows] == [("A", "Restock"), ("B", "Refurbish"), ("C", "Scrap")]
+
+
+def test_fin001_price_tolerance_paired() -> None:
+    s = _section(_read("FIN-001"), "2.2")
+    assert re.search(r"within ±2% or \$50, whichever is lower", s)
+    assert _row_map(s)["Price"] == "Within ±2% or $50, whichever is lower"
+    assert _row_map(s)["Quantity"] == "Exact match"
+    assert _row_map(s)["Terms"] == "Net 45"
+
+
+def _table_rows3(section: str) -> list[tuple[str, str, str]]:
+    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$", section, re.M)
+    body = [r for r in rows if not set(r[0]) <= set("-")]
+    return body[1:]
