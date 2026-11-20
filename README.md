@@ -4,7 +4,7 @@ Ops Copilot answers questions about Meridian Supply Co.'s (fictional) warehouse 
 
 ## Status
 
-**Phase 1: working prototype, eval bars not all met.** The official 15-question eval (2026-11-20, code `6e2718f`, nonce-hardened judge prompt) passes 3 of 5 KPIs and **fails 2**: faithfulness (0.381 vs 0.90, FAIL) and p95 latency (13.8 s vs 8 s, FAIL). Retrieval (hit@4 1.0, MRR 1.0) and refusal (2/2) pass; 7 of 15 questions pass; answer quality on multi-document and ambiguous questions is weak. Nothing was loosened to pass. Details: [eval/report.md](eval/report.md).
+**Phase 1: working prototype, eval bars not all met.** Iteration 2 of the official 15-question eval (2026-11-20, code `00d4363`, Groq `openai/gpt-oss-120b` as generator and judge) passes 4 of 5 KPIs and **fails 1**: faithfulness (0.867 vs 0.90, FAIL). Retrieval (hit@4 1.0, MRR 1.0), refusal (2/2) and p95 latency (1.79 s vs 8 s) pass; 11 of 15 questions pass; two multi-document questions (Q10, Q11) were falsely refused by the citation validator. The Iteration 1 baseline (local `llama3.1:8b`, code `6e2718f`: faithfulness 0.381, p95 13.8 s, 7 of 15 passed) is kept in the report with a before/after comparison. The latency pass is not a like-for-like pipeline improvement (remote API vs local hardware). Nothing was loosened to pass. Details: [eval/report.md](eval/report.md).
 
 ## Setup
 
@@ -45,7 +45,7 @@ for g in scripts/gate_*.sh; do bash "$g"; done  # all gates (lint, typecheck, te
 
 The eval sends corpus text to the LLM, so it refuses to run unless the provider is local Ollama on a loopback host. To run it against a remote provider (for example `LLM_PROVIDER=groq`) or a non-loopback Ollama, set `EVAL_ALLOW_REMOTE=1` deliberately on the command line or in the shell. It is read only from the real process environment; a value in `.env` is ignored.
 
-The eval loads `.env` the same way the app does. The judge defaults to the generator model; set `EVAL_JUDGE_MODEL` to use another. It refuses to run (exit 2) if the judge is any 8B model, is smaller than the generator, or a model size cannot be parsed from its name, so the small local `llama3.1:8b` is no longer accepted as generator or judge. Example: `LLM_PROVIDER=groq GROQ_MODEL=llama-3.3-70b-versatile EVAL_ALLOW_REMOTE=1 uv run python eval/run_eval.py`. It prints `generator model='...' judge model='...'` (names only, quoted with repr, never the key).
+The eval loads `.env` the same way the app does. The judge defaults to the generator model; set `EVAL_JUDGE_MODEL` to use another. It refuses to run (exit 2) if the judge is any 8B model, is smaller than the generator, or a model size cannot be parsed from its name, so the small local `llama3.1:8b` is no longer accepted as generator or judge and Iteration 1 cannot be re-run as configured. `EVAL_PACE_S` (seconds, default 0) adds an untimed sleep before every generator and judge call; a 429 from either is retried after an untimed backoff (10, 20, 40, 60, 60 s). Iteration 2 was run with `EVAL_PACE_S=10`. Example: `LLM_PROVIDER=groq GROQ_MODEL=openai/gpt-oss-120b EVAL_ALLOW_REMOTE=1 EVAL_PACE_S=10 uv run python eval/run_eval.py`. It prints `generator model='...' judge model='...'` (names only, quoted with repr, never the key). Note that `EVAL_ALLOW_REMOTE=1` sends the corpus and questions to the remote provider.
 
 ## Architecture
 
@@ -78,23 +78,22 @@ flowchart LR
 
 ## Latest eval
 
-Official run 2026-11-20T09:57:08Z on commit `6e2718f`, `llama3.1:8b` (generator and judge, hardened judge prompt), `nomic-embed-text`, hybrid top-4, gate 0.61. Source: `eval/latest.json`; full report with per-question results and failure analysis: [eval/report.md](eval/report.md).
+Iteration 2: official run 2026-11-20T22:57:27Z on commit `00d4363`, Groq `openai/gpt-oss-120b` (generator and judge, same judge prompt as Iteration 1), `nomic-embed-text`, hybrid top-4, gate 0.61. Source: `eval/latest.json`; full report with the Iteration 1 (baseline) comparison, per-question changes and failure analysis: [eval/report.md](eval/report.md).
 
-| KPI | Result | Bar | Status |
-|---|---|---|---|
-| Faithfulness | 0.381 (8/21 claims) | >= 0.90 | **FAIL** |
-| hit@4 | 1.000 | >= 0.85 | PASS |
-| MRR | 1.000 | >= 0.70 | PASS |
-| Refusal correct | 2/2 | 2/2 | PASS |
-| p95 latency | 13,808.5 ms | < 8,000 ms | **FAIL** |
+| KPI | Iteration 1 (baseline) | Iteration 2 | Bar | Iteration 2 status |
+|---|---|---|---|---|
+| Faithfulness | 0.381 (8/21 claims) | 0.867 (13/15 claims) | >= 0.90 | **FAIL** |
+| hit@4 | 1.000 | 1.000 | >= 0.85 | PASS |
+| MRR | 1.000 | 1.000 | >= 0.70 | PASS |
+| Refusal correct | 2/2 | 2/2 | 2/2 | PASS |
+| p95 latency | 13,808.5 ms | 1,790.5 ms | < 8,000 ms | PASS |
 
-Questions passed: 7 of 15. Also: citation accuracy 0.917, answer rate 0.923, false refusals 1 (Q10, model refused). The faithfulness drop from the earlier 0.632 is explained in [eval/report.md](eval/report.md): same-model judge, changed judge prompt and run-to-run nondeterminism, not separable from the records.
+Questions passed: 11 of 15 (Iteration 1: 7). Also: citation accuracy 0.909 (0.917), answer rate 0.846 (0.923), false refusals 2 (1): Q10 `invalid_citation` and Q11 `no_valid_citations`. Q9 (faithfulness 0.5) and Q13 (answered with one reading only) also fail. Iteration 1 is the local `llama3.1:8b` run (code `6e2718f`). The two iterations differ in model, judge and hardware, so they show the effect of the configuration, not of a pipeline change.
 
 ## Known limitations
 
-- **Official run on the hardened judge prompt**: the figures above come from the single official run with the nonce-hardened judge prompt; there is no second run to show the spread.
-- **Same-model judge**: the faithfulness judge is the same 8B model as the generator; in the official run it gave false negatives on claims that match the corpus word for word (for example Q1, Q3) and a lenient pass on a garbled answer (Q6). Treat faithfulness as a smoke signal.
-- **8B latency**: a local 8B model takes about 3 to 14 s per answered question; multi-document questions set the p95.
+- **Single run per iteration**: the figures above come from one official run per iteration; there is no second run to show the spread. Temperature is 0 but outputs are still nondeterministic (a post-run re-ask of Q11 was answered although the official run refused it; see the report).
+- **Same-model judge**: in both iterations the faithfulness judge is the same model as the generator, so it shares the generator's blind spots. In Iteration 1 it gave false negatives on claims that match the corpus word for word (for example Q1, Q3); in Iteration 2 it rejected a supported claim in Q9. Treat faithfulness as a smoke signal.
+- **Latency**: Iteration 2 latency (all answered questions under 1.8 s) is dominated by the Groq API and network, not by local hardware, so it is not comparable with the 3 to 14 s of the local 8B Iteration 1. The corpus and questions were sent to Groq with the owner's approval (`EVAL_ALLOW_REMOTE=1`).
 - **Validator false refusals**: the citation validator can refuse a correct answer, for example when it mentions a token like `PO-2291` or `COVID-19`, uses a citation form outside the grammar (ranges, "Section n"), uses non-ASCII symbols, or cites a section that was not retrieved. The full list is in [eval/report.md](eval/report.md).
 - Multi-document and ambiguous questions are often answered incompletely; the gate threshold margin is thin (one unanswerable question cannot be separated from the answerable ones).
-- Single eval run; local Ollama at temperature 0 is not guaranteed deterministic.

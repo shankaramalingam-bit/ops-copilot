@@ -1,9 +1,146 @@
-# Ops Copilot — Phase 1 eval (official run)
+# Ops Copilot — Phase 1 eval report
+
+Two official runs of the same 15-question eval are reported. **Iteration 1 (baseline)** is the local `llama3.1:8b` run. **Iteration 2** is the Groq `openai/gpt-oss-120b` run, which is the current result (`eval/latest.json`, the Console Evals tab, the README and the notebook all show it). Nothing was tuned or loosened for either run.
+
+| | Iteration 1 (baseline) | Iteration 2 |
+|---|---|---|
+| Run | 2026-11-20T09:57:08Z | 2026-11-20T22:57:27Z |
+| Code commit | `6e2718f` | `00d4363` |
+| Generator | `llama3.1:8b` (Ollama, local, temperature 0) | `openai/gpt-oss-120b` (Groq, temperature 0) |
+| Judge | `llama3.1:8b` (same model) | `openai/gpt-oss-120b` (same model) |
+| Embeddings / retrieval | `nomic-embed-text`, hybrid BM25 + dense, RRF k=60, top-4 | same |
+| Gate threshold / judge prompt | 0.61 (calibrated on a held-out set) / nonce-hardened | same / same |
+| Pacing | none | `EVAL_PACE_S=10` |
+| Raw data | `eval/results/20261120T095708Z.json` | `eval/results/20261120T225727Z.json` |
+
+Code differences between the two commits are eval-harness changes only (F3/F3.1/F4: `.env` loading, `EVAL_JUDGE_MODEL` and the judge-size guard, rate-limit backoff and `EVAL_PACE_S`). No change to prompts, the 0.61 threshold, the questions, retrieval or scoring. `rate_limit_retries` and `judge_rate_limit_retries` are 0 for every Iteration 2 question.
+
+The eval now refuses an 8B judge (and any judge smaller than the generator), so the Iteration 1 configuration cannot be re-run as it stands.
+
+---
+
+## Before / after
+
+### The five KPIs
+
+| KPI | Bar | Iteration 1 (baseline) | Iteration 2 |
+|---|---|---|---|
+| Faithfulness | ≥ 0.90 | 0.381 (8/21 claims), **FAIL** | 0.867 (13/15 claims), **FAIL** |
+| hit@4 | ≥ 0.85 | 1.000, PASS | 1.000, PASS |
+| MRR | ≥ 0.70 | 1.000, PASS | 1.000, PASS |
+| Refusal correct | 2/2 | 2/2, PASS | 2/2, PASS |
+| p95 latency | < 8,000 ms | 13,808.5 ms, **FAIL** | 1,790.5 ms, PASS |
+
+Iteration 1 passed 3 of 5 KPIs; Iteration 2 passes 4 of 5. Faithfulness still fails: 0.867 vs 0.90.
+
+p95 uses the nearest-rank method (rank ceil(0.95 × 15) = 15, the maximum): Iteration 1 Q11 = 13,808.5 ms; Iteration 2 Q11 = 1,790.5 ms (a refused answer). hit@4/MRR are doc-level (an expected document appears in the top-4 / its rank), not section-level.
+
+### Secondary metrics
+
+| Metric | Iteration 1 (baseline) | Iteration 2 |
+|---|---|---|
+| Citation accuracy | 0.917 (11/12 answered) | 0.909 (10/11 answered) |
+| False refusals | 1 (Q10, `model_refused`) | 2 (Q10 `invalid_citation`, Q11 `no_valid_citations`) |
+| Answer rate | 0.923 (12/13 answerable) | 0.846 (11/13 answerable) |
+| Questions passed | 7/15 (Q2, Q4, Q5, Q6, Q8, Q14, Q15) | 11/15 (Q1–Q8, Q12, Q14, Q15) |
+
+Faithfulness rose while answer rate and citation accuracy slipped. The two false refusals (Q10, Q11) took two multi-document questions out of the faithfulness sample, so 0.867 is measured on 15 claims from 11 answered questions and is not directly comparable to the 21 claims of Iteration 1.
+
+### What the change can and cannot be attributed to
+
+Model, judge model, hardware (local vs remote API) and run-to-run nondeterminism all changed together; there is one run each. The records support "the Iteration 2 configuration scores higher on faithfulness and is faster", not "the pipeline improved". The retrieval stack, gate, prompts and questions are unchanged: hit@4, MRR and the per-question retrieval confidences are identical in the two runs.
+
+### Per-question changes
+
+Latency in ms; faith = per-question faithfulness; `-` = nothing was judged (refused).
+
+| Q | Type | Iteration 1: passed / faith / ms / refusal | Iteration 2: passed / faith / ms / refusal | Change |
+|---|---|---|---|---|
+| Q1 | direct | no / 0.0 / 3,362.2 | yes / 1.0 / 1,599.2 | fail → pass |
+| Q2 | direct | yes / 1.0 / 3,649.6 | yes / 1.0 / 854.5 | unchanged |
+| Q3 | direct | no / 0.0 / 3,797.6 | yes / 1.0 / 641.4 | fail → pass |
+| Q4 | direct | yes / 1.0 / 3,922.5 | yes / 1.0 / 971.3 | unchanged (now also cites PR-002 §2.1) |
+| Q5 | direct | yes / 1.0 / 4,211.0 | yes / 1.0 / 784.7 | unchanged |
+| Q6 | direct | yes / 1.0 / 4,426.7 | yes / 1.0 / 1,005.0 | unchanged (wording now matches FIN-001 §2.2) |
+| Q7 | direct | no / 0.5 / 6,545.2 | yes / 1.0 / 1,121.6 | fail → pass (single reading, WH-005 §2.1) |
+| Q8 | direct | yes / 1.0 / 4,418.1 | yes / 1.0 / 1,114.1 | unchanged (now also cites CS-001 §4.3) |
+| Q9 | multi | no / 0.25 / 10,423.2 | no / 0.5 / 1,774.3 | still fail; faith 0.25 → 0.5 |
+| Q10 | multi | no / - / 10,428.5 / `model_refused` | no / - / 1,667.1 / `invalid_citation` | still a false refusal; reason changed |
+| Q11 | multi | no / 0.0 / 13,808.5 | no / - / 1,790.5 / `no_valid_citations` | still fail; unfaithful answer → false refusal |
+| Q12 | ambiguous | no / 0.0 / 6,624.3 | yes / 1.0 / 1,485.2 | fail → pass |
+| Q13 | ambiguous | no / 1.0 / 3,739.5 | no / 1.0 / 1,078.6 | unchanged (still fail) |
+| Q14 | unanswerable | yes / - / 65.0 / `below_gate` | yes / - / 54.8 / `below_gate` | unchanged |
+| Q15 | unanswerable | yes / - / 18.2 / `below_gate` | yes / - / 60.9 / `below_gate` | unchanged |
+
+Four questions went fail → pass (Q1, Q3, Q7, Q12) and none went pass → fail. Seven were passes in both runs (Q2, Q4, Q5, Q6, Q8, Q14, Q15) and four failed in both (Q9, Q10, Q11, Q13). That gives 7 + 4 = 11 passed.
+
+---
+
+## Iteration 2: failure analysis
+
+From the records in `eval/results/20261120T225727Z.json` (answers, judge verdicts, notes) and the corpus text in `data/docs/`.
+
+- **Retrieval:** no hit@4 misses. Multi-doc coverage in the top-4 is incomplete for Q9, Q10 and Q13, as in Iteration 1.
+- **Gate refusals:** none on answerable questions (lowest answerable confidence 0.663, Q13). Q14 (0.548) and Q15 (0.530) were correctly refused without calling the LLM.
+- **Validator refusals:** two, Q10 (`invalid_citation`) and Q11 (`no_valid_citations`). Both are false refusals.
+- **Q1–Q8, Q12:** answered, faithfulness 1.0, passed. Q12's purchase-order reading says the monetary thresholds "are not detailed in the excerpts provided", and the judge accepted that absence claim as supported by PR-001 §1.1. The retrieved PR-001 chunks were §5.1 and §1.1, not §2.1 where the PO bands are, so this pass is on an incomplete answer.
+
+### Q9: faithfulness 0.5 (2 of 4 claims), not passed
+
+Answer: record the damage on the bill of lading; photograph the damaged units; follow the OS&D policy; "these actions are required by the inspection step for outer-carton damage and by the OS&D policy's objective". Cited WH-001 §4.2 and WH-003 §1.1; the judge was given `WH-003#1.1#0` and `WH-001#4.2#0`.
+
+The judge rejected two claims. Checked against the chunk text:
+
+- **Claim 2, "Take a photograph of the damaged units or packaging as evidence": judge error (false negative).** WH-001 §4.2, a cited chunk, has the row "Outer carton damage | Note on bill of lading, photograph, see WH-003". The claim is supported by the cited text.
+- **Claim 4, "These actions are required by the inspection step for outer-carton damage and by the OS&D policy's objective": not shown to be a judge error.** The outer-carton row exists in WH-001 §4.2, and WH-003 §1.1 is titled "Objective" (preserve the right to recover cost from the carrier or supplier). But the claim is a vague summary, and "required by ... the policy's objective" is not something WH-003 §1.1 says. The NO is defensible.
+
+The question fails for reasons independent of the judge. The answer omits the Procurement notice within 24 hours (WH-003 §2.3), quarantine in the OS&D lane, and the NCR within 1 business day (QA-001 §2.1): three of the four expected points. None of WH-003 §2.x or QA-001 was in the top-4 (retrieved: WH-003 §1.2, WH-003 §1.1, WH-001 §4.2, PR-002 §3.2). It also cites WH-001, which is not an expected doc; that is the one citation-accuracy miss. Notes: "citation not within expected docs; unfaithful claim(s); not all expected docs cited; not all expected docs in top-4".
+
+### Q10: false refusal, `invalid_citation`
+
+The gate passed (confidence 0.744), the model produced an answer, and the citation validator refused it. The record keeps only the standard refusal text, with no citations and no model output. Retrieved chunks were all WH-002 (§4.2, §4.1, §3.1, §4.3), none from WH-005, which holds the approver bands. So even an accepted answer could only cover the recount rules, not who approves $7,000. The official run's raw output was not recorded; see the post-run diagnostic below.
+
+### Q11: false refusal, `no_valid_citations`
+
+The gate passed (confidence 0.750) and both expected docs were retrieved (PR-001 §2.1, PR-001 §4.1, FIN-001 §3.1, PR-001 §5.3; coverage true). The validator found no valid citation in the model output. The official run's raw output was not recorded, so the exact cause is unknown. A single post-run re-ask was answered, so this refusal is nondeterministic (diagnostic below). In Iteration 1 the same question was answered but unfaithfully (see Iteration 1).
+
+### Q13: passed = False despite faithfulness 1.0
+
+Answer: "You must raise the non-conformance report within one business day of discovering the problem. [QA-001 §2.1]". The claim is supported by QA-001 §2.1 ("within 1 business day"). The notes field reads "not all expected docs cited; no labelled readings; not all expected docs in top-4". The question ("How long do I have to report a problem?") is ambiguous, with two expected readings: Procurement within 24 hours of receipt for OS&D exceptions (WH-003 §2.3), and an NCR within 1 business day (QA-001 §2.1). The answer gives only the QA-001 reading, with no "If you mean ..." labels, and WH-003 was not in the top-4 (retrieved: QA-001 §2.1, PR-001 §4.2, WH-004 §2.2, QA-001 §1.2). So the failure is retrieval coverage plus the missing labelled readings plus the second expected doc not cited, not only missing labels. It is faithful but incomplete, as in Iteration 1.
+
+### Post-run diagnostic (NOT part of the official run)
+
+After the official run, the orchestrator re-asked Q10 and Q11 once each through the same pipeline and model and captured the raw model output. These are single ad hoc observations. They are not in `eval/results/` and change no figure above.
+
+- Groq returns gpt-oss reasoning in a separate `reasoning_content` field (`additional_kwargs`), not in the message content, so reasoning text did not reach the citation parser.
+- **Q10 re-ask:** refused again with `invalid_citation`. The raw content cited [WH-002 §4.1], [WH-002 §4.2] and [WH-002 §4.3], and also contained a bare doc mention "WH‑005" written with a U+2011 non-breaking hyphen and no §. That bare mention is the likely trigger of the residual-citation check (an inference, not verified).
+- **Q11 re-ask:** the answer was accepted, not refused. So the official run's Q11 refusal is nondeterministic. The official run's raw output was not recorded, so its exact cause is unknown. One possibility is that reasoning tokens consumed the output token budget; this is unverified.
+
+No parser or validator change was made or proposed. Possible next steps, all owner decisions:
+
+1. Keep the validator as is and accept the two false refusals as the recorded result.
+2. Record the raw model output (and `reasoning_content` and finish reason) for refused answers in future runs, so causes are known rather than inferred.
+3. Decide whether the validator should treat a bare doc ID with no section differently. Per the governance policy, measure how many existing records such a rule would change before adding it.
+4. Review the output token budget for reasoning models.
+5. Repeat the run to measure spread.
+
+### Caveats
+
+- **Self-judging.** The judge is the same model as the generator (`openai/gpt-oss-120b`), so it shares the generator's blind spots. Faithfulness is a smoke signal. The one verified judge error in Iteration 2 is Q9 claim 2.
+- **Hidden retries.** The Groq SDK's own `max_retries=1` can retry a 429 inside a timed call, invisibly to the harness. All Iteration 2 latencies are under 1.8 s, so there is no evidence of hidden retries.
+- **Latency is not like-for-like.** Iteration 2 latency is dominated by the network and Groq, not local hardware. The p95 change from 13.8 s to 1.8 s reflects a move from a local 8B model to a hosted 120B model, not a pipeline improvement.
+- **Data left the machine.** The corpus and questions were sent to Groq with the owner's approval (`EVAL_ALLOW_REMOTE=1`).
+- **Nondeterminism.** Temperature is 0, but outputs are still nondeterministic (the Q11 re-ask). One run per iteration; no spread is available.
+- **Model choice.** The owner chose `openai/gpt-oss-120b`; `llama-3.3-70b-versatile` was not available on the owner's key.
+
+---
+
+## Iteration 1 (baseline)
 
 **Run:** 2026-11-20T09:57:08Z · code commit `6e2718f` · generator and judge `llama3.1:8b` (Ollama, temperature 0) · embeddings `nomic-embed-text` · hybrid retrieval (BM25 + dense, RRF k=60, top-4) · gate threshold 0.61 (calibrated on a held-out set) · judge prompt: nonce-hardened (per-call random-token tags around context and claim).
-Raw data: `eval/results/20261120T095708Z.json` (`eval/latest.json` is the same run without the answers, judge detail and timings). Single run; local Ollama at temperature 0 is not guaranteed deterministic. Nothing was tuned for this run.
+Raw data: `eval/results/20261120T095708Z.json`. Single run; local Ollama at temperature 0 is not guaranteed deterministic. Nothing was tuned for this run.
 
-## KPIs vs pass bars
+### KPIs vs pass bars
 
 | KPI | Result | Bar | Status |
 |---|---|---|---|
@@ -13,16 +150,16 @@ Raw data: `eval/results/20261120T095708Z.json` (`eval/latest.json` is the same r
 | Refusal correct | 2/2 | 2/2 | PASS |
 | p95 latency | 13,808.5 ms | < 8,000 ms | **FAIL** |
 
-Notes: p95 uses the nearest-rank method (rank ceil(0.95 × 15) = 15, i.e. the maximum, Q11 = 13,808.5 ms). Linear interpolation over the same 15 recorded latencies gives 11,442.5 ms, which also fails the 8,000 ms bar. hit@4/MRR are doc-level (an expected document appears in the top-4 / its rank), not section-level.
+Notes: p95 uses the nearest-rank method (rank ceil(0.95 × 15) = 15, i.e. the maximum, Q11 = 13,808.5 ms). Linear interpolation over the same 15 recorded latencies gives 11,442.5 ms, which also fails the 8,000 ms bar.
 
 Supporting: citation accuracy 0.917 (11/12 answered), answer rate 0.923 (12/13 answerable), false refusals 1 (Q10, `model_refused`), questions passed 7/15 (Q2, Q4, Q5, Q6, Q8, Q14, Q15).
 
-## Definition of `passed`
+### Definition of `passed` (both iterations)
 - Unanswerable: refused.
 - Answerable: answered, hit@4, valid citations ⊆ expected docs with ≥1 expected doc cited, and per-question faithfulness = 1.0.
 - Multi-doc and ambiguous additionally require every expected doc among the valid citations; ambiguous additionally requires labelled "If you mean …" readings.
 
-## Per-question results
+### Per-question results (Iteration 1)
 
 Prior = the earlier run of 2026-11-20T09:06:01Z (judge prompt before hardening), shown in brackets.
 
@@ -44,7 +181,7 @@ Prior = the earlier run of 2026-11-20T09:06:01Z (judge prompt before hardening),
 | Q14 | unanswerable | yes (below_gate) | – | – | 65 | yes (yes) |
 | Q15 | unanswerable | yes (below_gate) | – | – | 18 | yes (yes) |
 
-## Why faithfulness fell from 0.632 to 0.381
+### Why faithfulness fell from 0.632 to 0.381 (within Iteration 1)
 
 Faithfulness is claim-level: 12/19 claims judged supported before, 8/21 now. What the records show:
 
@@ -52,7 +189,7 @@ Faithfulness is claim-level: 12/19 claims judged supported before, 8/21 now. Wha
 - **Three things changed and cannot be separated from these records:** (1) the judge prompt was changed (nonce-hardened), (2) the judge is the same 8B model as the generator, (3) run-to-run nondeterminism at temperature 0: six of the 13 answered questions have different answer text between the runs (Q1, Q4, Q5, Q6, Q12, Q13), including Q4 and Q6 going 0.0 → 1.0 and Q12 gaining labelled readings. There is one run per judge prompt, so no attribution to a single cause is claimed.
 - **The new verdicts contradict the corpus in several places** (below), so 0.381 understates answer quality there. It also should not be read as "the earlier 0.632 was the true number": Q6 and Q9 contain wording problems that the judge passed or partly passed.
 
-## Failure analysis (per question, from the recorded answers and judge verdicts)
+### Failure analysis (Iteration 1, per question, from the recorded answers and judge verdicts)
 
 - **Retrieval misses (hit@4):** none; every answerable question had an expected doc in the top-4. Multi-doc *coverage* within the top-4 was incomplete for Q9, Q10 and Q13. Not tuned.
 - **Gate refusals:** none on answerable questions (lowest answerable confidence 0.663, Q13). Q14 (0.548) and Q15 (0.530) were correctly refused without calling the LLM.
@@ -71,8 +208,10 @@ Faithfulness is claim-level: 12/19 claims judged supported before, 8/21 now. Wha
 - **Latency:** p95 is set by the multi-doc questions (Q11 13.8 s, Q9 10.4 s, Q10 10.4 s). The LLM step is nearly all of each answered question's time (Q11: 13,720 of 13,809 ms). The earlier Q1 included the first model load and this run's did not, so 15,877 ms vs 13,808.5 ms is not a like-for-like improvement claim.
 - **Judge limitation:** the judge is the same small local model as the generator. This run shows false negatives on correct claims (Q1, Q3, Q7 reading 1, Q11 claims 1 and 3) and a lenient pass on a garbled answer (Q6). Each claim is checked only against the chunks it cites (or all used chunks if it cites none). Faithfulness is a smoke signal, not a precise measure; the FAIL stands as the recorded result.
 
-## Gate threshold calibration (held-out, not the 15)
-16 answerable and 10 unanswerable in-domain questions (`eval/calibration.yaml`), retrieval only. Unchanged by this run.
+---
+
+## Gate threshold calibration (held-out, not the 15; shared by both iterations)
+16 answerable and 10 unanswerable in-domain questions (`eval/calibration.yaml`), retrieval only. Unchanged by either run.
 - answerable: min 0.631 · p25 0.716 · median 0.767 · p75 0.826 · max 0.855
 - unanswerable: min 0.501 · p25 0.526 · median 0.577 · p75 0.605 · max 0.664
 - Chosen threshold **0.61** (balanced accuracy 0.950; TPR 1.000; TNR 0.900); ties 0.61–0.63 broken toward the lower value. The margin is thin: U3 (EDI formats, 0.664) cannot be separated by the gate; lowest answerable is C10 (0.631).
@@ -83,4 +222,4 @@ Faithfulness is claim-level: 12/19 claims judged supported before, 8/21 now. Wha
 - Characters outside the allowlist (arrows, comparison signs, other non-ASCII symbols).
 - Square/angle brackets or braces used for anything other than a canonical citation.
 - A cited section not among the retrieved chunks.
-The validator was not loosened for this eval. It refused no answer in this run; the earlier run's one validator refusal (Q10) became a model refusal.
+The validator was not loosened for either run. It refused no answer in Iteration 1 (the earlier run's one validator refusal, Q10, became a model refusal); it refused Q10 and Q11 in Iteration 2 (see above).
