@@ -141,3 +141,11 @@ def test_makefile_targets() -> None:
     mk = (ROOT / "Makefile").read_text()
     for t in ("run", "test", "gates", "eval", "notebook"):
         assert re.search(rf"^{t}:", mk, re.M), t
+
+
+def test_readmes_document_env_file_invocation() -> None:
+    # Compose's project dir is deploy/, so ${...} reads deploy/.env unless --env-file is given.
+    for readme in (ROOT / "README.md", DEPLOY / "README.md"):
+        text = readme.read_text(encoding="utf-8")
+        assert "--env-file .env -f deploy/docker-compose.yml" in text, readme
+        assert "GROQ_API_KEY" in text and "docker inspect" in text, readme

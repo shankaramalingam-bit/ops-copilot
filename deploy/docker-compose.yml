@@ -1,8 +1,10 @@
-# Run from the repository root:  docker compose -f deploy/docker-compose.yml up --build
+# Run from the repository root:  docker compose --env-file .env -f deploy/docker-compose.yml up --build -d
+# (--env-file is needed: compose's project directory is deploy/, so without it ${...} reads deploy/.env,
+# NOT the repository-root .env, and silently falls back to the defaults.)
 # There is NO authentication. The app port is published on the loopback interface only.
 #
 # Configuration: compose reads LLM_PROVIDER, OLLAMA_MODEL and GROQ_API_KEY from the shell
-# environment or from an optional .env file at the repository root (used by compose only for
+# environment or from the repository-root .env passed with --env-file .env (used by compose only for
 # ${...} interpolation; it is never passed wholesale to the container). Only the three variables
 # listed under `environment:` reach the app; no other key is forwarded. Never commit a .env.
 services:

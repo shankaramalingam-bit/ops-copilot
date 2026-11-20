@@ -7,7 +7,7 @@ Two services: `app` (the FastAPI API plus the portal) and `ollama` (models, kept
 From the repository root:
 
 ```bash
-docker compose -f deploy/docker-compose.yml up --build -d
+docker compose --env-file .env -f deploy/docker-compose.yml up --build -d
 # pull the models inside the ollama container (first run only; they persist in the volume)
 docker compose -f deploy/docker-compose.yml exec ollama ollama pull nomic-embed-text
 docker compose -f deploy/docker-compose.yml exec ollama ollama pull llama3.1:8b
@@ -16,13 +16,20 @@ docker compose -f deploy/docker-compose.yml exec ollama ollama pull llama3.1:8b
 Open http://localhost:8000. Stop with `docker compose -f deploy/docker-compose.yml down` (add `-v` to also delete the models).
 
 The default provider is Ollama with `llama3.1:8b`. Compose reads `LLM_PROVIDER`, `OLLAMA_MODEL` and, only for
-`LLM_PROVIDER=groq`, `GROQ_API_KEY` from the shell environment or from an optional `.env` at the repository root
-(compose uses that file only to resolve `${...}` in the compose file). Only these three variables are passed to the
+`LLM_PROVIDER=groq`, `GROQ_API_KEY` from the shell environment or from the repository-root `.env`, which you must pass explicitly with
+`--env-file .env` (compose uses that file only to resolve `${...}` in the compose file). Compose's project directory is
+`deploy/`, so without `--env-file` it looks for `deploy/.env` and silently falls back to the defaults (`ollama`).
+If you have no `.env`, drop the `--env-file .env` flag. Only these three variables are passed to the
 container, by explicit `environment:` entries; no other key from the shell or `.env` reaches it. Never commit `.env`;
 the Docker build context excludes `**/.env*`, so it is never baked into the image.
 
 Both services have health checks (`app`: `GET /api/docs` with `Host: localhost`; `ollama`: `ollama list`), and `app`
 starts only once `ollama` is healthy.
+
+## Secret warning
+
+`docker compose config` and `docker inspect` print `GROQ_API_KEY` in clear text when it is set. Never paste their
+output into chat, issues or logs.
 
 ## Why the port is bound to 127.0.0.1
 
