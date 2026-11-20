@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian Ops Portal</title>
+<style>
+:root{
+  --bg:#F3F5F9;--panel:#FFFFFF;--ink:#172033;--muted:#5F6B7F;--line:#E3E7EE;--soft:#F7F9FC;
+  --side:#14213D;--side-ink:#C9D2E3;--side-on:#22345C;
+  --teal:#0E8C8C;--teal-soft:#E2F4F4;--amber:#D9822B;--amber-soft:#FCF1E5;
+  --red:#C2412D;--red-soft:#FCEBE8;--green:#2E8B57;--green-soft:#E5F4EB;--violet:#5B5BD6;--violet-soft:#ECECFC;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1420;--panel:#171E2C;--ink:#E6EAF2;--muted:#98A2B5;--line:#273044;--soft:#1C2435;
+  --side:#0B1020;--side-ink:#AEB8CC;--side-on:#1B2742;
+  --teal-soft:#123232;--amber-soft:#3A2915;--red-soft:#3A1D18;--green-soft:#16301F;--violet-soft:#22224A;}}
+:root[data-theme="dark"]{
+  --bg:#0F1420;--panel:#171E2C;--ink:#E6EAF2;--muted:#98A2B5;--line:#273044;--soft:#1C2435;
+  --side:#0B1020;--side-ink:#AEB8CC;--side-on:#1B2742;
+  --teal-soft:#123232;--amber-soft:#3A2915;--red-soft:#3A1D18;--green-soft:#16301F;--violet-soft:#22224A;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.app.copilot{grid-template-columns:220px 1fr 400px}
+/* sidebar */
+.side{background:var(--side);color:var(--side-ink);padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;padding:4px 8px 18px}
+.logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--amber),#F2B05E);display:grid;place-items:center;font-weight:800;color:#14213D}
+.brand small{display:block;font-weight:500;color:var(--side-ink);font-size:11px}
+.side .sec{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;padding:14px 10px 4px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:0;background:none;color:inherit;font:inherit;text-align:left;width:100%}
+.nav:hover{background:var(--side-on)}.nav.on{background:var(--side-on);color:#fff;font-weight:600}
+.nav .dot{width:8px;height:8px;border-radius:3px;background:currentColor;opacity:.5}
+.nav.on .dot{background:var(--amber);opacity:1}
+.nav .ct{margin-left:auto;font-size:11px;background:var(--red);color:#fff;border-radius:99px;padding:0 7px}
+.side .foot{margin-top:auto;font-size:11px;opacity:.6;padding:10px}
+/* top */
+.main{display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:12px;padding:12px 22px;background:var(--panel);border-bottom:1px solid var(--line)}
+.top h1{font-size:18px;margin:0}.top .crumb{color:var(--muted);font-size:12px}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:7px 12px;color:var(--muted);min-width:240px;cursor:pointer}
+.cbtn{background:linear-gradient(135deg,var(--teal),#13A6A6);color:#fff;border:0;border-radius:10px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;display:flex;gap:8px;align-items:center}
+.cbtn .spark{font-size:15px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--violet-soft);color:var(--violet);display:grid;place-items:center;font-weight:700;font-size:12px}
+.page{padding:20px 22px;display:none}.page.on{display:block}
+.banner{display:flex;gap:10px;align-items:center;background:var(--amber-soft);color:var(--amber);border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:16px}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px}
+@media (max-width:1300px){.kpis{grid-template-columns:repeat(3,1fr)}}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden}
+.kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.kpi .l{color:var(--muted);font-size:12px}.kpi .v{font-size:26px;font-weight:700;margin:2px 0}
+.kpi .d{font-size:12px}.up{color:var(--green)}.dn{color:var(--red)}
+.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+@media (max-width:1200px){.cols{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h2 .sub{color:var(--muted);font-weight:400;font-size:12px;margin-left:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:0}
+.st{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.st.ok{background:var(--green-soft);color:var(--green)}.st.warn{background:var(--amber-soft);color:var(--amber)}
+.st.bad{background:var(--red-soft);color:var(--red)}.st.info{background:var(--teal-soft);color:var(--teal)}
+.ask{border:1px solid var(--teal);color:var(--teal);background:transparent;border-radius:8px;padding:4px 9px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.ask:hover{background:var(--teal-soft)}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar{display:grid;grid-template-columns:120px 1fr 44px;gap:10px;align-items:center;font-size:13px}
+.bar .t{height:9px;background:var(--soft);border-radius:99px;overflow:hidden}.bar .t i{display:block;height:100%;border-radius:99px}
+.docgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.doc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.doc .code{display:inline-block;font-size:11px;font-weight:700;color:var(--teal);background:var(--teal-soft);border-radius:6px;padding:2px 7px;margin-bottom:6px}
+.doc b{display:block}.doc span{color:var(--muted);font-size:12.5px}
+.doc .m{font-size:11.5px;color:var(--muted);margin-top:8px}
+/* copilot panel */
+.cp{display:none;background:var(--panel);border-left:1px solid var(--line);flex-direction:column;height:100vh;position:sticky;top:0}
+.app.copilot .cp{display:flex}
+.cp .hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.cp .hd .ic{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),#13A6A6);color:#fff;display:grid;place-items:center}
+.cp .hd b{display:block}.cp .hd small{color:var(--muted);font-size:11.5px}
+.x{margin-left:auto;border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer}
+.msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.q{align-self:flex-end;background:var(--side);color:#fff;padding:9px 13px;border-radius:14px 14px 4px 14px;max-width:88%}
+.a{align-self:flex-start;background:var(--soft);border:1px solid var(--line);padding:11px 13px;border-radius:14px 14px 14px 4px;max-width:96%}
+.a.refuse{background:var(--red-soft);border-color:transparent}
+.cite{font-size:11.5px;padding:1px 7px;border-radius:99px;background:var(--teal-soft);color:var(--teal);font-weight:700;border:0;cursor:pointer;font-family:inherit}
+.meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pill{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--muted)}
+.pill.ok{background:var(--green-soft);color:var(--green)}.pill.no{background:var(--red-soft);color:var(--red)}
+.link{font-size:11.5px;color:var(--violet);background:none;border:0;cursor:pointer;font:inherit;font-size:11.5px;text-decoration:underline}
+.typing{color:var(--muted);font-size:12.5px;font-style:italic}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 8px}
+.chips button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:99px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.chips button:hover{border-color:var(--teal)}
+.cp form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+.cp input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--ink);font:inherit}
+.cp .send{background:var(--teal);color:#fff;border:0;border-radius:10px;padding:0 14px;font:inherit;font-weight:600;cursor:pointer}
+.scope{font-size:11px;color:var(--muted);padding:0 16px 10px}
+/* console */
+.tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;padding:9px 14px;font:inherit;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.tabs button.on{color:var(--ink);font-weight:600;border-color:var(--teal)}
+.ctab{display:none}.ctab.on{display:block}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:12px}
+.toggle button{border:0;background:var(--panel);color:var(--muted);padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.toggle button.on{background:var(--side);color:#fff}
+.gate{display:flex;align-items:center;gap:8px;font-size:13px;padding:9px 12px;border-radius:9px;margin-bottom:12px}
+.gate.pass{background:var(--green-soft);color:var(--green)}.gate.fail{background:var(--red-soft);color:var(--red)}
+.trace{display:flex;flex-direction:column;gap:8px}
+.tr{display:grid;grid-template-columns:150px 1fr 70px;gap:10px;align-items:center;font-size:13px}
+.tr .t{height:10px;background:var(--soft);border-radius:99px;position:relative}.tr .t i{position:absolute;height:100%;border-radius:99px;background:var(--teal)}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.empty{color:var(--muted);font-size:13px}
+.ekpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+@media (max-width:1100px){.ekpis{grid-template-columns:repeat(2,1fr)}}
+.hl{animation:hl 1.4s}@keyframes hl{from{background:var(--teal-soft)}to{background:transparent}}
+@media (max-width:900px){.app,.app.copilot{grid-template-columns:1fr}.side{display:none}.cp{position:fixed;inset:0;height:auto;z-index:5}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="brand"><div class="logo">M</div><div>Meridian Ops<small>Supply Co. · fictional</small></div></div>
+    <div class="sec">Operations</div>
+    <button class="nav on" data-p="dash"><span class="dot"></span>Dashboard</button>
+    <button class="nav" data-p="recv"><span class="dot"></span>Receiving<span class="ct">3</span></button>
+    <button class="nav" data-p="po"><span class="dot"></span>Purchase orders</button>
+    <button class="nav" data-p="sup"><span class="dot"></span>Suppliers</button>
+    <div class="sec">Knowledge</div>
+    <button class="nav" data-p="kb"><span class="dot"></span>SOPs &amp; policies</button>
+    <div class="sec">Ops Copilot</div>
+    <button class="nav" data-p="console"><span class="dot"></span>Console</button>
+    <div class="foot">Prototype · Phase 1 (Week 2 RAG)<br>All data simulated</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div><div class="crumb" id="crumb">Operations</div><h1 id="title">Dashboard</h1></div>
+      <div class="search" id="opencp">⌕ Ask about any SOP or policy…</div>
+      <button class="cbtn" id="cpbtn"><span class="spark">✦</span>Ops Copilot</button>
+      <div class="avatar">JR</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section class="page on" id="dash">
+      <div class="banner">✦ Ops Copilot answers from Meridian's 10 SOPs and policies, with citations. Dashboard figures are simulated for the demo.</div>
+      <div class="kpis">
+        <div class="kpi" style="--c:var(--teal)"><div class="l">Open purchase orders</div><div class="v">142</div><div class="d"><span class="up">▲ 6</span> vs last week</div></div>
+        <div class="kpi" style="--c:var(--violet)"><div class="l">Receipts today</div><div class="v">38 / 45</div><div class="d">7 still at dock</div></div>
+        <div class="kpi" style="--c:var(--red)"><div class="l">Open discrepancies</div><div class="v">9</div><div class="d"><span class="dn">▲ 3</span> short · over · damaged</div></div>
+        <div class="kpi" style="--c:var(--amber)"><div class="l">Supplier quality score</div><div class="v">86.4</div><div class="d"><span class="dn">▼ 1.8</span> 2 suppliers below 70</div></div>
+        <div class="kpi" style="--c:var(--green)"><div class="l">Key-account fill rate</div><div class="v">97.2%</div><div class="d">target 98%</div></div>
+      </div>
+      <div class="cols">
+        <div class="card">
+          <h2>Inbound receipts · exceptions <span class="sub">Dock 1–4 · today</span></h2>
+          <table><thead><tr><th>Receipt</th><th>PO</th><th>Supplier</th><th>Exception</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rcvrows"></tbody></table>
+        </div>
+        <div class="card">
+          <h2>Supplier quality <span class="sub">rolling quarter</span></h2>
+          <div class="bars" id="bars"></div>
+          <div style="margin-top:14px"><button class="ask" data-s="2">✦ Ask: what happens after repeat NCRs?</button></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2>POs awaiting approval <span class="sub">by value band</span></h2>
+        <table><thead><tr><th>PO</th><th>Category</th><th>Value</th><th>Requested by</th><th>Status</th><th></th></tr></thead>
+        <tbody id="porows"></tbody></table>
+      </div>
+    </section>
+
+    <section class="page" id="recv"><div class="card"><h2>Receiving <span class="sub">simulated</span></h2><table><thead><tr><th>Receipt</th><th>PO</th><th>Supplier</th><th>Exception</th><th>Status</th><th></th></tr></thead><tbody class="rcvclone"></tbody></table></div></section>
+    <section class="page" id="po"><div class="card"><h2>Purchase orders <span class="sub">simulated</span></h2><table><thead><tr><th>PO</th><th>Category</th><th>Value</th><th>Requested by</th><th>Status</th><th></th></tr></thead><tbody class="poclone"></tbody></table></div></section>
+    <section class="page" id="sup"><div class="card"><h2>Supplier scorecards <span class="sub">simulated</span></h2><div class="bars barsclone"></div></div></section>
+
+    <section class="page" id="kb">
+      <div class="banner">These 10 documents are the Copilot's only knowledge. If an answer isn't in them, it refuses.</div>
+      <div class="docgrid" id="docs"></div>
+    </section>
+
+    <!-- CONSOLE -->
+    <section class="page" id="console">
+      <div class="tabs">
+        <button class="on" data-t="insp">Retrieval inspector</button>
+        <button data-t="trace">Run trace</button>
+        <button data-t="eval">Evals</button>
+      </div>
+      <div class="ctab on" id="insp"><div class="card" id="inspbody"><div class="empty">Ask Ops Copilot a question. This view then shows which chunks were found, how keyword and meaning search ranked them, and whether they passed the confidence gate.</div></div></div>
+      <div class="ctab" id="trace"><div class="card" id="tracebody"><div class="empty">No run yet.</div></div></div>
+      <div class="ctab" id="eval">
+        <div class="banner">Layout only. Real scores come from <span class="mono">eval/run_eval.py</span> after the build. The pass bars are our targets.</div>
+        <div class="ekpis">
+          <div class="kpi" style="--c:var(--teal)"><div class="l">Faithfulness</div><div class="v">–</div><div class="d">target ≥ 0.90 · LLM judge</div></div>
+          <div class="kpi" style="--c:var(--violet)"><div class="l">Retrieval hit@4</div><div class="v">–</div><div class="d">target ≥ 0.85</div></div>
+          <div class="kpi" style="--c:var(--amber)"><div class="l">MRR</div><div class="v">–</div><div class="d">target ≥ 0.70</div></div>
+          <div class="kpi" style="--c:var(--red)"><div class="l">Refusal correct</div><div class="v">–</div><div class="d">target 2 / 2</div></div>
+          <div class="kpi" style="--c:var(--green)"><div class="l">p95 latency</div><div class="v">–</div><div class="d">target &lt; 8 s</div></div>
+        </div>
+        <div class="card"><h2>15-question eval set</h2><table><thead><tr><th>#</th><th>Type</th><th>Question</th><th>Expected source</th><th>Result</th></tr></thead><tbody id="evalrows"></tbody></table></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- COPILOT -->
+  <aside class="cp">
+    <div class="hd"><div class="ic">✦</div><div><b>Ops Copilot</b><small>Answers from Meridian SOPs · cites every claim</small></div><button class="x" id="cpclose" aria-label="Close">×</button></div>
+    <div class="msgs" id="msgs"><div class="a">Hi Jordan 👋 Ask me how to handle anything you see on the dashboard. I answer only from Meridian's SOPs and policies, and I'll tell you when something isn't covered.</div></div>
+    <div class="chips" id="chips"></div>
+    <div class="scope">Phase 1: answers questions only. It can't take actions yet (that's Phase 2).</div>
+    <form id="f"><input id="in" placeholder="Ask about a procedure or policy…" autocomplete="off"><button class="send">Ask</button></form>
+  </aside>
+</div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const DOCS=[["RCV","Receiving & Putaway SOP","Dock check-in, count, ASN match, putaway","v3.2 · Warehouse Ops"],
+["CC","Cycle Count SOP","ABC cadence and recount triggers","v2.0 · Inventory Control"],
+["OSD","Short / Over / Damaged Policy","Discrepancies found at receipt","v4.1 · Warehouse Ops"],
+["RMA","Customer Returns (RMA)","Return authorisation and disposition","v1.7 · Customer Service"],
+["POA","PO Approval Matrix","Who approves purchase orders, by value","v5.0 · Procurement"],
+["SUP","Supplier Onboarding","New supplier checks and setup","v2.3 · Procurement"],
+["NCR","Supplier Quality & NCR","Non-conformance, holds, scorecards","v3.0 · Quality"],
+["3WM","3-Way Match Policy","PO, receipt and invoice tolerance","v2.1 · Finance"],
+["ADJ","Inventory Adjustment Approvals","Write-off thresholds and sign-off","v1.4 · Finance"],
+["SLA","Key-Account Service Levels","CRM tiers, fill rate, response times","v2.2 · Customer Service"]];
+$("#docs").innerHTML=DOCS.map(d=>`<div class="doc" id="doc-${d[0]}"><span class="code">${d[0]}</span><b>${d[1]}</b><span>${d[2]}</span><div class="m">${d[3]}</div></div>`).join("");
+const RCV=[["R-24117","PO-88214","Northfield Packaging","5 cartons short vs ASN","bad","Short",0],
+["R-24121","PO-88230","Clearwater Plastics","Damaged pallet · 3rd this quarter","bad","Damaged",2],
+["R-24125","PO-88241","Altamont Fasteners","Over by 40 units","warn","Over",4],
+["R-24128","PO-88255","Brightline Labels","—","ok","Matched",null]];
+const rr=RCV.map(r=>`<tr><td class="mono">${r[0]}</td><td class="mono" style="white-space:nowrap">${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><span class="st ${r[4]}">${r[5]}</span></td><td>${r[6]!==null?`<button class="ask" data-s="${r[6]}">✦ Ask</button>`:""}</td></tr>`).join("");
+$("#rcvrows").innerHTML=rr;$(".rcvclone").innerHTML=rr;
+const POS=[["PO-88262","Packaging (indirect)","$40,000","A. Patel","warn","Needs 2 approvers",1],
+["PO-88263","Raw material","$4,200","L. Chen","ok","Buyer approved",null],
+["PO-88266","MRO · new supplier","$60,000","S. Okafor","bad","Blocked",5]];
+const pr=POS.map(r=>`<tr><td class="mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><span class="st ${r[4]}">${r[5]}</span></td><td>${r[6]!==null?`<button class="ask" data-s="${r[6]}">✦ Ask</button>`:""}</td></tr>`).join("");
+$("#porows").innerHTML=pr;$(".poclone").innerHTML=pr;
+const SUPS=[["Brightline Labels",94,"var(--green)"],["Altamont Fasteners",88,"var(--teal)"],["Northfield Packaging",81,"var(--amber)"],["Clearwater Plastics",64,"var(--red)"],["Ridgeway Pallets",68,"var(--red)"]];
+const br=SUPS.map(s=>`<div class="bar"><span>${s[0]}</span><div class="t"><i style="width:${s[1]}%;background:${s[2]}"></i></div><b>${s[1]}</b></div>`).join("");
+$("#bars").innerHTML=br;$(".barsclone").innerHTML=br;
+
+const SCEN=[
+ {chip:"Delivery is 5 cartons short",q:"R-24117 arrived 5 cartons short of the ASN. What do I do?",
+  a:`Receive only the cartons physically present and record the shortage on the receipt. Don't edit the ASN to match <button class="cite" data-c="OSD §2.1">OSD §2.1</button>. Note the exception on the carrier's proof of delivery before signing <button class="cite" data-c="OSD §2.2">OSD §2.2</button>. Open a discrepancy case within 24 hours so the buyer can notify the supplier <button class="cite" data-c="OSD §3">OSD §3</button>. The PO line stays open for the missing 5 until they ship or the buyer cancels <button class="cite" data-c="RCV §4.3">RCV §4.3</button>.`,
+  hits:["OSD","RCV"],gate:.82,t:[["Embed question",120],["BM25 search",15],["Dense search",48],["RRF merge",2],["Confidence gate",1],["LLM answer",3150]],
+  chunks:[{id:"OSD §2.1",t:"Short shipments: receive only what is physically present. Record shortage quantity on the receipt; never edit the ASN to match.",bm:1,dn:1,rrf:.0328,u:1},
+   {id:"OSD §3",t:"Open a discrepancy case within 24 hours. Buyer notifies supplier and requests credit or a follow-up shipment.",bm:3,dn:2,rrf:.0320,u:1},
+   {id:"RCV §4.3",t:"Partially received PO lines remain open for the outstanding quantity until shipped or cancelled by the buyer.",bm:2,dn:4,rrf:.0315,u:1},
+   {id:"OSD §2.2",t:"Annotate the carrier POD with the exception before signing. Unannotated PODs weaken freight claims.",bm:5,dn:3,rrf:.0310,u:1},
+   {id:"CC §5",t:"Recount triggers: variance over 2% or $500 at item level…",bm:6,dn:9,rrf:.0268,u:0}]},
+ {chip:"Who approves a $40k PO?",q:"Who needs to approve PO-88262, $40,000 of packaging?",
+  a:`$40,000 is in the $25,000–$100,000 band, which needs the <b>Procurement Manager</b> and the <b>Site Operations Director</b> <button class="cite" data-c="POA §2">POA §2</button>. Packaging is an indirect category, so the budget holder must also confirm before release <button class="cite" data-c="POA §3.1">POA §3.1</button>.`,
+  hits:["POA"],gate:.88,t:[["Embed question",110],["BM25 search",12],["Dense search",44],["RRF merge",2],["Confidence gate",1],["LLM answer",2480]],
+  chunks:[{id:"POA §2",t:"Approval bands: < $5k buyer; $5k–25k Procurement Manager; $25k–100k Procurement Manager + Site Ops Director; > $100k adds VP Supply Chain.",bm:1,dn:1,rrf:.0328,u:1},
+   {id:"POA §3.1",t:"Indirect categories (packaging, MRO, services) require budget-holder confirmation before PO release.",bm:2,dn:3,rrf:.0318,u:1},
+   {id:"SUP §4",t:"New suppliers cannot receive a PO above $25k until onboarding is complete…",bm:4,dn:2,rrf:.0313,u:0}]},
+ {chip:"Repeat damage from one supplier",q:"Clearwater Plastics sent a damaged pallet again, the third this quarter. What should happen?",
+  a:`Put the damaged stock on <b>quality hold</b> and don't put it away <button class="cite" data-c="OSD §4">OSD §4</button>. Raise a Non-Conformance Report. Three NCRs in a rolling quarter trigger a <b>Supplier Corrective Action Request (SCAR)</b> <button class="cite" data-c="NCR §3.2">NCR §3.2</button>. Their scorecard drops too, and below 70 they move to conditional status <button class="cite" data-c="NCR §5">NCR §5</button>. <i>This answer combines 2 documents.</i>`,
+  hits:["OSD","NCR"],gate:.79,t:[["Embed question",118],["BM25 search",14],["Dense search",51],["RRF merge",2],["Confidence gate",1],["LLM answer",3620]],
+  chunks:[{id:"OSD §4",t:"Damaged goods: photograph, segregate to the QH location, do not put away. Notify Quality.",bm:2,dn:1,rrf:.0325,u:1},
+   {id:"NCR §3.2",t:"Raise an NCR for each quality failure. 3 NCRs in a rolling quarter → Supplier Corrective Action Request (SCAR).",bm:1,dn:3,rrf:.0320,u:1},
+   {id:"NCR §5",t:"Scorecard: quality points deducted per NCR; below 70 → conditional status and review.",bm:4,dn:2,rrf:.0315,u:1},
+   {id:"RMA §2",t:"Customer returns of damaged items are inspected within 48 hours…",bm:3,dn:7,rrf:.0292,u:0}]},
+ {chip:"Vacation days? (refuses)",q:"How many vacation days do warehouse staff get?",refuse:1,gate:.31,
+  t:[["Embed question",105],["BM25 search",11],["Dense search",40],["RRF merge",2],["Confidence gate",1],["LLM answer",0]],
+  chunks:[{id:"SLA §1",t:"Key-account tiers: Platinum accounts receive 4-hour response…",bm:9,dn:4,rrf:.0255,u:0},
+   {id:"CC §2",t:"Count schedules avoid peak days and planned staff leave…",bm:3,dn:8,rrf:.0250,u:0}]},
+ {chip:"Over-delivery by 40 units",q:"Altamont shipped 40 units more than PO-88241. Do we keep them?",
+  a:`Over-shipments up to <b>5%</b> of the PO line may be received if the buyer agrees. Anything beyond that is refused at the dock or held for return at the supplier's cost <button class="cite" data-c="OSD §5">OSD §5</button>. Whatever is accepted must be added to the PO before invoicing, or the 3-way match will fail <button class="cite" data-c="3WM §2">3WM §2</button>.`,
+  hits:["OSD","3WM"],gate:.76,t:[["Embed question",112],["BM25 search",13],["Dense search",47],["RRF merge",2],["Confidence gate",1],["LLM answer",2890]],
+  chunks:[{id:"OSD §5",t:"Over-shipments: accept up to 5% of line quantity with buyer agreement; excess refused or held for return at supplier cost.",bm:1,dn:1,rrf:.0328,u:1},
+   {id:"3WM §2",t:"Quantity tolerance: invoice quantity must not exceed received and PO quantity…",bm:2,dn:3,rrf:.0318,u:1}]},
+ {chip:"New supplier, $60k PO?",q:"PO-88266 is $60,000 to a supplier we onboarded last week. Why is it blocked?",
+  a:`New suppliers can't receive a PO above <b>$25,000</b> until onboarding is complete, including the financial-risk and quality-system checks <button class="cite" data-c="SUP §4">SUP §4</button>. Once onboarding is done, a $60,000 PO still needs the Procurement Manager and the Site Operations Director to approve it <button class="cite" data-c="POA §2">POA §2</button>.`,
+  hits:["SUP","POA"],gate:.81,t:[["Embed question",108],["BM25 search",12],["Dense search",45],["RRF merge",2],["Confidence gate",1],["LLM answer",2710]],
+  chunks:[{id:"SUP §4",t:"New suppliers cannot receive a PO above $25k until onboarding (financial risk, quality system, banking verification) is complete.",bm:1,dn:1,rrf:.0328,u:1},
+   {id:"POA §2",t:"Approval bands: … $25k–100k Procurement Manager + Site Ops Director…",bm:2,dn:2,rrf:.0323,u:1}]}
+];
+const REF="I couldn't find this in Meridian's documents.";
+$("#chips").innerHTML=[0,1,2,3].map(i=>`<button data-s="${i}">${SCEN[i].chip}</button>`).join("");
+let cur=null,mode="hybrid";
+function openCP(){$("#app").classList.add("copilot");setTimeout(()=>$("#in").focus(),50);}
+$("#cpbtn").onclick=openCP;$("#opencp").onclick=openCP;$("#cpclose").onclick=()=>$("#app").classList.remove("copilot");
+document.addEventListener("click",e=>{const b=e.target.closest("[data-s]");if(b){openCP();ask(SCEN[b.dataset.s].q,SCEN[b.dataset.s]);}});
+$("#f").onsubmit=e=>{e.preventDefault();const v=$("#in").value.trim();if(!v)return;$("#in").value="";const lv=v.toLowerCase();
+ const map=[[["short","missing","fewer"],0],[["approve","approval"],1],[["damag","ncr","quality"],2],[["over","extra"],4],[["new supplier","onboard","blocked"],5]];
+ const m=map.find(x=>x[0].some(k=>lv.includes(k)));ask(v,m?SCEN[m[1]]:{refuse:1,gate:.22,chunks:[],t:[["Embed question",100],["BM25 search",10],["Dense search",40],["RRF merge",2],["Confidence gate",1],["LLM answer",0]]});};
+function ask(q,s){const m=$("#msgs");m.insertAdjacentHTML("beforeend",`<div class="q">${q.replace(/</g,"&lt;")}</div><div class="typing">Searching SOPs · ranking · checking confidence…</div>`);m.scrollTop=m.scrollHeight;
+ setTimeout(()=>{m.querySelector(".typing")?.remove();
+  if(s.refuse)m.insertAdjacentHTML("beforeend",`<div class="a refuse"><b>${REF}</b><br><span style="font-size:12.5px">The closest passages scored ${s.gate.toFixed(2)}, below the 0.55 confidence threshold, so I won't guess. HR policies aren't in my knowledge base.</span><div class="meta"><span class="pill no">refused · below threshold</span><button class="link" data-con>View in Console</button></div></div>`);
+  else m.insertAdjacentHTML("beforeend",`<div class="a">${s.a}<div class="meta"><span class="pill ok">grounded · ${s.chunks.filter(c=>c.u).length} sources</span><span class="pill">confidence ${s.gate.toFixed(2)}</span><button class="link" data-con>View in Console</button></div></div>`);
+  m.scrollTop=m.scrollHeight;cur=s;renderConsole();},700);}
+$("#msgs").addEventListener("click",e=>{const c=e.target.closest(".cite");if(c){go("kb");const d=$("#doc-"+c.dataset.c.split(" ")[0]);d.scrollIntoView({block:"center"});d.classList.remove("hl");void d.offsetWidth;d.classList.add("hl");}
+ if(e.target.closest("[data-con]"))go("console");});
+function renderConsole(){const s=cur;if(!s)return;let ch=[...s.chunks];
+ if(mode==="bm25")ch.sort((a,b)=>a.bm-b.bm);else if(mode==="dense")ch.sort((a,b)=>a.dn-b.dn);else ch.sort((a,b)=>b.rrf-a.rrf);
+ const pass=s.gate>=.55;
+ $("#inspbody").innerHTML=`<h2>Last question <span class="sub">top k = 4 · RRF k = 60</span></h2>
+  <div class="toggle">${["bm25","dense","hybrid"].map(x=>`<button data-m="${x}" class="${mode===x?"on":""}">${{bm25:"Keyword (BM25)",dense:"Meaning (dense)",hybrid:"Hybrid (RRF)"}[x]}</button>`).join("")}</div>
+  <div class="gate ${pass?"pass":"fail"}">${pass?"✓":"✕"} Confidence ${s.gate.toFixed(2)} ${pass?"≥":"<"} 0.55 → ${pass?"answer from these chunks":"refuse without calling the LLM"}</div>
+  ${ch.length?`<table><thead><tr><th>Chunk</th><th>Text</th><th>BM25</th><th>Dense</th><th>RRF</th><th>Used</th></tr></thead><tbody>${ch.map(c=>`<tr><td class="mono">${c.id}</td><td style="color:var(--muted)">${c.t}</td><td>#${c.bm}</td><td>#${c.dn}</td><td class="mono">${c.rrf.toFixed(4)}</td><td><span class="st ${c.u?"ok":"info"}">${c.u?"cited":"no"}</span></td></tr>`).join("")}</tbody></table>`:`<div class="empty">No chunks above the minimum similarity.</div>`}`;
+ const tot=s.t.reduce((a,b)=>a+b[1],0);
+ $("#tracebody").innerHTML=`<h2>Run trace <span class="sub">total ${(tot/1000).toFixed(2)} s · ${s.refuse?"LLM skipped (refused)":"model llama3.1:8b via Ollama"}</span></h2><div class="trace">${s.t.map(x=>`<div class="tr"><span>${x[0]}</span><div class="t"><i style="width:${Math.max(1,x[1]/tot*100)}%"></i></div><span class="mono">${x[1]} ms</span></div>`).join("")}</div>`;}
+$("#inspbody").addEventListener("click",e=>{const b=e.target.closest("[data-m]");if(b){mode=b.dataset.m;renderConsole();}});
+const TITLES={dash:["Operations","Dashboard"],recv:["Operations","Receiving"],po:["Operations","Purchase orders"],sup:["Operations","Suppliers"],kb:["Knowledge","SOPs & policies"],console:["Ops Copilot","Console"]};
+function go(p){$$(".nav").forEach(n=>n.classList.toggle("on",n.dataset.p===p));$$(".page").forEach(x=>x.classList.toggle("on",x.id===p));$("#crumb").textContent=TITLES[p][0];$("#title").textContent=TITLES[p][1];}
+$$(".nav").forEach(n=>n.onclick=()=>go(n.dataset.p));
+$$(".tabs button").forEach(b=>b.onclick=()=>{$$(".tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".ctab").forEach(x=>x.classList.toggle("on",x.id===b.dataset.t));});
+const EV=[["Direct","What's the recount trigger in a cycle count?","CC"],["Direct","Who approves a $40k PO?","POA"],["Direct","How do I handle a short shipment?","OSD"],["Direct","What's the invoice price tolerance in 3-way match?","3WM"],["Direct","How fast must a damaged return be inspected?","RMA"],["Direct","What checks come before onboarding a supplier?","SUP"],["Direct","Who signs off a $3,000 write-off?","ADJ"],["Direct","What's the Platinum account response time?","SLA"],["Multi-doc","Repeat damaged deliveries from one supplier?","OSD + NCR"],["Multi-doc","Can a brand-new supplier get a $60k PO?","SUP + POA"],["Multi-doc","A short shipment caused an invoice mismatch. Can we pay?","OSD + 3WM"],["Ambiguous","What's the threshold?","clarify"],["Ambiguous","What do I do with bad stock?","OSD / RMA / ADJ"],["Unanswerable","How many vacation days do staff get?","refuse"],["Unanswerable","What's the forklift vendor's phone number?","refuse"]];
+$("#evalrows").innerHTML=EV.map((r,i)=>`<tr><td>${i+1}</td><td><span class="st info">${r[0]}</span></td><td>${r[1]}</td><td class="mono">${r[2]}</td><td><span class="pill">pending</span></td></tr>`).join("");
+</script>
+</body>
+</html>

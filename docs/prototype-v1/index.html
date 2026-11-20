@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ops Copilot Prototype</title>
+<style>
+:root{
+  --bg:#F4F5F7;--panel:#FFFFFF;--ink:#1B2333;--muted:#5D6778;--line:#E2E5EA;
+  --navy:#1F2A44;--amber:#C9731F;--amber-soft:#FBF0E4;--ok:#2F7A4F;--ok-soft:#E6F3EB;
+  --warn:#A23B2A;--warn-soft:#FBEAE7;--chip:#EEF1F5;--code:#F7F8FA;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151D;--panel:#1A202B;--ink:#E7EAF0;--muted:#9AA3B2;--line:#2A3240;
+  --navy:#C9D3E8;--amber:#E99A4C;--amber-soft:#3A2A1A;--ok:#6CC08F;--ok-soft:#1C3326;
+  --warn:#F08A78;--warn-soft:#3A201C;--chip:#232A36;--code:#151A22;}}
+:root[data-theme="dark"]{
+  --bg:#11151D;--panel:#1A202B;--ink:#E7EAF0;--muted:#9AA3B2;--line:#2A3240;
+  --navy:#C9D3E8;--amber:#E99A4C;--amber-soft:#3A2A1A;--ok:#6CC08F;--ok-soft:#1C3326;
+  --warn:#F08A78;--warn-soft:#3A201C;--chip:#232A36;--code:#151A22;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--navy)}
+.logo{width:28px;height:28px;border-radius:7px;background:var(--amber);display:grid;place-items:center;color:#fff;font-size:14px;font-weight:800}
+.brand small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{border:0;background:transparent;color:var(--muted);padding:8px 14px;border-radius:8px;font:inherit;cursor:pointer}
+nav button.on{background:var(--chip);color:var(--ink);font-weight:600}
+.badge{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--amber-soft);color:var(--amber);font-weight:600}
+main{padding:16px 20px;max-width:1400px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+.grid{display:grid;grid-template-columns:240px 1fr 360px;gap:16px;align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
+.doc{display:flex;gap:8px;padding:7px 6px;border-radius:8px;font-size:13px;cursor:default}
+.doc.hit{background:var(--amber-soft)}
+.doc b{font-weight:600}
+.doc span{color:var(--muted);font-size:12px;display:block}
+.ico{width:34px;height:22px;flex:none;border-radius:6px;background:var(--chip);display:grid;place-items:center;font-size:11px;color:var(--muted);font-weight:700}
+.chat{display:flex;flex-direction:column;min-height:560px}
+.msgs{flex:1;display:flex;flex-direction:column;gap:14px;padding:4px 2px 12px}
+.q{align-self:flex-end;background:var(--navy);color:var(--bg);padding:10px 14px;border-radius:14px 14px 4px 14px;max-width:80%}
+:root[data-theme="dark"] .q{color:#11151D}
+.a{align-self:flex-start;background:var(--code);border:1px solid var(--line);padding:12px 14px;border-radius:14px 14px 14px 4px;max-width:92%}
+.a.refuse{background:var(--warn-soft);border-color:transparent}
+.a .meta{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.cite{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--amber-soft);color:var(--amber);font-weight:600;border:0;cursor:pointer;font-family:inherit}
+.pill{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.no{background:var(--warn-soft);color:var(--warn)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.chips button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chips button:hover{border-color:var(--amber)}
+form{display:flex;gap:8px}
+input[type=text]{flex:1;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+.send{background:var(--amber);color:#fff;border:0;border-radius:10px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer}
+.typing{color:var(--muted);font-size:13px;font-style:italic}
+.chunk{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;font-size:13px}
+.chunk.used{border-color:var(--amber)}
+.chunk .hd{display:flex;justify-content:space-between;gap:8px;font-weight:600;margin-bottom:4px}
+.chunk p{margin:6px 0 8px;color:var(--muted)}
+.ranks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ranks div{background:var(--chip);border-radius:6px;padding:4px 6px;font-size:11px;color:var(--muted)}
+.ranks b{display:block;color:var(--ink);font-size:13px}
+.gate{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 10px;border-radius:8px;margin-bottom:10px}
+.gate.pass{background:var(--ok-soft);color:var(--ok)}.gate.fail{background:var(--warn-soft);color:var(--warn)}
+.empty{color:var(--muted);font-size:13px}
+.toggle{display:flex;gap:4px;margin-bottom:10px}
+.toggle button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:8px;padding:5px;font:inherit;font-size:12px;cursor:pointer}
+.toggle button.on{background:var(--navy);color:var(--bg);border-color:var(--navy)}
+/* flow */
+.flow{display:grid;grid-template-columns:1fr 340px;gap:16px}
+@media (max-width:1000px){.flow{grid-template-columns:1fr}}
+svg .node rect{fill:var(--panel);stroke:var(--line);stroke-width:1.5;cursor:pointer}
+svg .node.on rect{stroke:var(--amber);stroke-width:2.5}
+svg .node text{fill:var(--ink);font-size:13px;font-weight:600;pointer-events:none}
+svg .node .sub{fill:var(--muted);font-size:11px;font-weight:400}
+svg .lane{fill:var(--muted);font-size:11px;letter-spacing:.08em;font-weight:700}
+svg .edge{stroke:var(--muted);stroke-width:1.6;fill:none}
+svg .edge.r{stroke:var(--warn)}svg .edge.g{stroke:var(--ok)}
+.step h3{margin:0 0 4px;font-size:18px}.step .tag{font-size:12px;color:var(--amber);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.step code,.mono{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi .v{font-size:26px;font-weight:700}.kpi .l{color:var(--muted);font-size:12px}.kpi .t{font-size:12px;color:var(--muted)}
+.note{background:var(--amber-soft);color:var(--amber);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">M</div><div>Ops Copilot<small>Meridian Supply Co. · fictional</small></div></div>
+  <span class="badge">Prototype · Phase 1 (Week 2 RAG)</span>
+  <nav>
+    <button data-v="chat" class="on">Ask</button>
+    <button data-v="flow">How it works</button>
+    <button data-v="eval">Eval</button>
+  </nav>
+</header>
+
+<main>
+<!-- CHAT -->
+<section id="chat" class="view on">
+  <div class="grid">
+    <aside class="card">
+      <h2>Knowledge base · 10 docs</h2>
+      <div id="docs"></div>
+    </aside>
+    <div class="card chat">
+      <h2>Ask Meridian's SOPs and policies</h2>
+      <div class="msgs" id="msgs">
+        <div class="a">Hi! Ask me anything about Meridian's warehouse, procurement or quality procedures. I answer <b>only</b> from the documents on the left and cite every claim. If it isn't in the docs, I'll say so.</div>
+      </div>
+      <div class="chips" id="chips"></div>
+      <form id="f"><input type="text" id="in" placeholder="e.g. A delivery arrived with 5 cartons missing. What do I do?" autocomplete="off"><button class="send">Ask</button></form>
+    </div>
+    <aside class="card" id="inspector">
+      <h2>Retrieval inspector</h2>
+      <div class="empty">Ask a question to see which chunks were found, how keyword (BM25) and meaning (dense) search ranked them, and whether they passed the confidence threshold.</div>
+    </aside>
+  </div>
+</section>
+
+<!-- FLOW -->
+<section id="flow" class="view">
+  <div class="flow">
+    <div class="card">
+      <h2>Pipeline · click a step</h2>
+      <svg viewBox="0 0 900 470" width="100%" role="img" aria-label="Ops Copilot RAG pipeline">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="currentColor"/></marker></defs>
+        <text class="lane" x="20" y="28">INDEXING · runs once, when docs change</text>
+        <text class="lane" x="20" y="218">ANSWERING · runs per question</text>
+        <g style="color:var(--muted)">
+          <path class="edge" d="M170 70H200" marker-end="url(#ar)"/>
+          <path class="edge" d="M350 70H380" marker-end="url(#ar)"/>
+          <path class="edge" d="M530 70C555 70 555 50 580 50" marker-end="url(#ar)"/>
+          <path class="edge" d="M530 70C555 70 555 120 580 120" marker-end="url(#ar)"/>
+          <path class="edge" d="M170 260H200" marker-end="url(#ar)"/>
+          <path class="edge" d="M655 150V180Q655 200 600 230L355 240" stroke-dasharray="4 4" marker-end="url(#ar)"/>
+          <path class="edge" d="M350 260H380" marker-end="url(#ar)"/>
+          <path class="edge g" d="M530 260H560" style="color:var(--ok)" marker-end="url(#ar)"/>
+          <path class="edge r" d="M455 285V330" style="color:var(--warn)" marker-end="url(#ar)"/>
+          <path class="edge" d="M710 260H740" marker-end="url(#ar)"/>
+          <path class="edge" d="M815 285V450H530" marker-end="url(#ar)"/>
+          <path class="edge" d="M455 380V430" marker-end="url(#ar)"/>
+        </g>
+        <text x="534" y="252" fill="var(--ok)" font-size="11">pass</text>
+        <text x="462" y="314" fill="var(--warn)" font-size="11">fail</text>
+        <g id="nodes"></g>
+      </svg>
+    </div>
+    <div class="card step" id="stepinfo"></div>
+  </div>
+</section>
+
+<!-- EVAL -->
+<section id="eval" class="view">
+  <div class="note">Illustrative layout only. Real numbers come from <span class="mono">eval/run_eval.py</span> once Phase 1 is built. The pass bars shown are our targets.</div>
+  <div class="kpis">
+    <div class="card kpi"><div class="l">Faithfulness</div><div class="v">–</div><div class="t">target ≥ 0.90 · LLM judge</div></div>
+    <div class="card kpi"><div class="l">Retrieval hit@4</div><div class="v">–</div><div class="t">target ≥ 0.85 · code</div></div>
+    <div class="card kpi"><div class="l">MRR</div><div class="v">–</div><div class="t">target ≥ 0.70 · code</div></div>
+    <div class="card kpi"><div class="l">Refusal correct</div><div class="v">–</div><div class="t">target 2 / 2 · code</div></div>
+    <div class="card kpi"><div class="l">p95 latency</div><div class="v">–</div><div class="t">target &lt; 8 s · local model</div></div>
+  </div>
+  <div class="card">
+    <h2>15-question eval set</h2>
+    <table><thead><tr><th>#</th><th>Type</th><th>Question</th><th>Expected source(s)</th><th>Result</th></tr></thead><tbody id="evalrows"></tbody></table>
+  </div>
+</section>
+</main>
+
+<script>
+const DOCS=[
+ ["RCV","Receiving & Putaway SOP","Dock check-in, count, ASN match, putaway"],
+ ["CC","Cycle Count SOP","ABC counting cadence, recount rules"],
+ ["OSD","Short / Over / Damaged Policy","Discrepancy handling at receipt"],
+ ["RMA","Customer Returns (RMA)","Return authorisation and disposition"],
+ ["POA","PO Approval Matrix","Who approves purchase orders, by value"],
+ ["SUP","Supplier Onboarding","New supplier checks and setup"],
+ ["NCR","Supplier Quality & NCR","Non-conformance reports, holds, scorecards"],
+ ["3WM","3-Way Match Policy","PO, receipt and invoice tolerance"],
+ ["ADJ","Inventory Adjustment Approvals","Write-off thresholds and sign-off"],
+ ["SLA","Key-Account Service Levels","CRM tiers, fill-rate and response targets"]
+];
+const SCEN=[
+ {key:["short","missing","cartons","fewer"],chip:"5 cartons short on a delivery. What do I do?",
+  q:"A delivery arrived with 5 cartons fewer than the ASN. What do I do?",
+  a:`Receive only the cartons physically present and record the shortage on the receipt. Do not adjust the ASN to match <button class="cite" data-c="0">OSD §2.1</button>. Note the shortage on the carrier's proof of delivery before signing <button class="cite" data-c="0">OSD §2.2</button>. Within 24 hours, open a discrepancy case so the buyer can notify the supplier <button class="cite" data-c="1">OSD §3</button>. The PO line stays open for the missing quantity until the supplier ships it or the buyer cancels it <button class="cite" data-c="2">RCV §4.3</button>.`,
+  hits:["OSD","RCV"],gate:0.82,
+  chunks:[
+   {id:"OSD §2.1",t:"Short shipments: receive only what is physically present. Record shortage quantity on the receipt; never edit the ASN to match.",bm:1,dn:1,rrf:0.0328,used:1},
+   {id:"OSD §3",t:"Open a discrepancy case within 24 hours. Buyer notifies supplier and requests credit or a follow-up shipment.",bm:3,dn:2,rrf:0.0320,used:1},
+   {id:"RCV §4.3",t:"Partially received PO lines remain open for the outstanding quantity until shipped or cancelled by the buyer.",bm:2,dn:4,rrf:0.0315,used:1},
+   {id:"OSD §2.2",t:"Annotate the carrier POD with the exception before signing. Unannotated PODs weaken freight claims.",bm:5,dn:3,rrf:0.0310,used:1},
+   {id:"CC §5",t:"Recount triggers: variance over 2% or $500 at item level…",bm:6,dn:9,rrf:0.0268,used:0}]},
+ {key:["approve","po","purchase","$","value","order"],chip:"Who approves a $40,000 PO?",
+  q:"Who needs to approve a $40,000 purchase order for packaging?",
+  a:`A $40,000 PO falls in the $25,000–$100,000 band, which needs the <b>Procurement Manager</b> and the <b>Site Operations Director</b> to approve <button class="cite" data-c="0">POA §2</button>. Packaging is an indirect spend category, so it also needs a budget-holder check before release <button class="cite" data-c="1">POA §3.1</button>.`,
+  hits:["POA"],gate:0.88,
+  chunks:[
+   {id:"POA §2",t:"Approval bands: < $5k buyer; $5k–25k Procurement Manager; $25k–100k Procurement Manager + Site Ops Director; > $100k adds VP Supply Chain.",bm:1,dn:1,rrf:0.0328,used:1},
+   {id:"POA §3.1",t:"Indirect categories (packaging, MRO, services) require budget-holder confirmation before PO release.",bm:2,dn:3,rrf:0.0318,used:1},
+   {id:"SUP §4",t:"New suppliers cannot receive a PO above $25k until onboarding is complete…",bm:4,dn:2,rrf:0.0313,used:0},
+   {id:"3WM §1",t:"Invoices are paid only when PO, receipt and invoice match within tolerance…",bm:7,dn:6,rrf:0.0283,used:0}]},
+ {key:["damaged","quality","defect","ncr","supplier keeps","repeat"],chip:"Damaged goods again from the same supplier. What now?",
+  q:"This is the third damaged delivery from the same supplier this quarter. What should happen?",
+  a:`Put the damaged stock on <b>quality hold</b> and do not put it away <button class="cite" data-c="0">OSD §4</button>. Because this is a repeat issue, raise a <b>Non-Conformance Report</b>. Three NCRs in a quarter trigger a corrective-action request (SCAR) to the supplier <button class="cite" data-c="1">NCR §3.2</button>. The supplier's quality score also drops, which can move them to "conditional" status on the scorecard <button class="cite" data-c="2">NCR §5</button>. <i>This answer combines 2 documents.</i>`,
+  hits:["OSD","NCR"],gate:0.79,
+  chunks:[
+   {id:"OSD §4",t:"Damaged goods: photograph, segregate to the QH location, do not put away. Notify Quality.",bm:2,dn:1,rrf:0.0325,used:1},
+   {id:"NCR §3.2",t:"Raise an NCR for each quality failure. 3 NCRs in a rolling quarter → Supplier Corrective Action Request (SCAR).",bm:1,dn:3,rrf:0.0320,used:1},
+   {id:"NCR §5",t:"Scorecard: quality points deducted per NCR; below 70 → conditional status and review.",bm:4,dn:2,rrf:0.0315,used:1},
+   {id:"RMA §2",t:"Customer returns of damaged items are inspected within 48 hours…",bm:3,dn:7,rrf:0.0292,used:0}]},
+ {key:["salary","bonus","holiday","pto","vacation","parking","lunch","ceo"],chip:"How many vacation days do I get?",
+  q:"How many vacation days do warehouse staff get?",
+  refuse:true,gate:0.31,
+  chunks:[
+   {id:"SLA §1",t:"Key-account tiers: Platinum accounts receive 4-hour response…",bm:9,dn:4,rrf:0.0255,used:0},
+   {id:"CC §2",t:"Count schedules avoid peak days and planned staff leave…",bm:3,dn:8,rrf:0.0250,used:0}]}
+];
+const REFUSAL="I couldn't find this in Meridian's documents.";
+const $=s=>document.querySelector(s);
+let mode="hybrid";
+function renderDocs(hits=[]){ $("#docs").innerHTML=DOCS.map(d=>`<div class="doc ${hits.includes(d[0])?"hit":""}"><div class="ico">${d[0]}</div><div><b>${d[1]}</b><span>${d[2]}</span></div></div>`).join(""); }
+renderDocs();
+$("#chips").innerHTML=SCEN.map((s,i)=>`<button data-i="${i}">${s.chip}</button>`).join("");
+$("#chips").onclick=e=>{const b=e.target.closest("button");if(b)ask(SCEN[b.dataset.i].q,SCEN[b.dataset.i]);};
+$("#f").onsubmit=e=>{e.preventDefault();const v=$("#in").value.trim();if(!v)return;$("#in").value="";
+  const lv=v.toLowerCase();const s=SCEN.find(s=>s.key.some(k=>lv.includes(k)))||{refuse:true,gate:0.22,chunks:[]};ask(v,s);};
+let cur=null;
+function ask(q,s){
+  const m=$("#msgs");m.insertAdjacentHTML("beforeend",`<div class="q">${q.replace(/</g,"&lt;")}</div><div class="typing">Retrieving · ranking · checking threshold…</div>`);
+  m.scrollTop=m.scrollHeight;
+  setTimeout(()=>{m.querySelector(".typing").remove();
+    if(s.refuse){m.insertAdjacentHTML("beforeend",`<div class="a refuse"><b>${REFUSAL}</b><br><span style="font-size:13px">The closest passages scored ${s.gate.toFixed(2)}, below the 0.55 confidence threshold, so I won't guess. Try HR or the employee handbook.</span><div class="meta"><span class="pill no">refused · below threshold</span></div></div>`);}
+    else{m.insertAdjacentHTML("beforeend",`<div class="a">${s.a}<div class="meta"><span class="pill ok">grounded · ${s.chunks.filter(c=>c.used).length} chunks cited</span><span class="pill">top score ${s.gate.toFixed(2)}</span></div></div>`);}
+    m.scrollTop=m.scrollHeight;cur=s;renderDocs(s.hits||[]);inspect();
+  },650);
+}
+$("#msgs").onclick=e=>{const c=e.target.closest(".cite");if(!c)return;const el=document.querySelectorAll("#inspector .chunk.used")[+c.dataset.c];if(el){el.scrollIntoView({behavior:"smooth",block:"center"});el.animate([{background:"var(--amber-soft)"},{background:"transparent"}],{duration:1200});}};
+function inspect(){
+  const s=cur;if(!s)return;
+  let ch=[...s.chunks];
+  if(mode==="bm25")ch.sort((a,b)=>a.bm-b.bm);else if(mode==="dense")ch.sort((a,b)=>a.dn-b.dn);else ch.sort((a,b)=>b.rrf-a.rrf);
+  const pass=s.gate>=0.55;
+  $("#inspector").innerHTML=`<h2>Retrieval inspector</h2>
+   <div class="toggle"><button data-m="bm25" class="${mode==="bm25"?"on":""}">Keyword (BM25)</button><button data-m="dense" class="${mode==="dense"?"on":""}">Meaning (dense)</button><button data-m="hybrid" class="${mode==="hybrid"?"on":""}">Hybrid (RRF)</button></div>
+   <div class="gate ${pass?"pass":"fail"}">${pass?"✓":"✕"} Confidence ${s.gate.toFixed(2)} ${pass?"≥":"<"} threshold 0.55 → ${pass?"answer from these chunks":"refuse, don't guess"}</div>
+   ${ch.length?ch.map(c=>`<div class="chunk ${c.used?"used":""}"><div class="hd"><span>${c.id}</span><span class="pill ${c.used?"ok":""}">${c.used?"cited":"not used"}</span></div><p>${c.t}</p><div class="ranks"><div>BM25 rank<b>#${c.bm}</b></div><div>Dense rank<b>#${c.dn}</b></div><div>RRF score<b>${c.rrf.toFixed(4)}</b></div></div></div>`).join(""):`<div class="empty">No chunks above the minimum similarity.</div>`}
+   <div class="empty" style="margin-top:6px">RRF = Σ 1/(60 + rank) across both searches. A chunk ranked well by both rises to the top.</div>`;
+}
+$("#inspector").onclick=e=>{const b=e.target.closest("[data-m]");if(b){mode=b.dataset.m;inspect();}};
+
+/* FLOW */
+const NODES=[
+ {id:"docs",x:20,y:45,t:"10 SOP docs",s:"data/docs/*.md",tag:"Corpus",h:"Meridian's knowledge",
+  d:"Ten simulated documents in Markdown: receiving, cycle counts, discrepancies, returns, PO approvals, supplier onboarding and quality, 3-way match, inventory adjustments, key-account SLAs. Generic industry practice, fictional numbers."},
+ {id:"clean",x:200,y:45,t:"Clean",s:"strip markup, boilerplate",tag:"Ingestion",h:"Clean before chunking",
+  d:"Remove headers and footers, revision tables and markup noise, and normalise whitespace. Keep the heading structure, because it becomes the citation (<code>OSD §2.1</code>)."},
+ {id:"chunk",x:380,y:45,t:"Chunk",s:"by heading · ~400 tok",tag:"Chunking",h:"Split on meaning, not just length",
+  d:"Split by section headings first, then by size (about 400 tokens with 15% overlap) using <code>RecursiveCharacterTextSplitter</code>. Each chunk keeps doc and section metadata. The notebook shows chunk sizes and one bad split, so you can see why it matters."},
+ {id:"embed",x:580,y:22,t:"Embed → Chroma",s:"nomic-embed-text (local)",tag:"Dense index",h:"Meaning search",
+  d:"Each chunk becomes a 768-dimension vector from <code>nomic-embed-text</code> via Ollama, free and on your Mac. Vectors are stored in Chroma under <code>data/cache/</code>. This finds paraphrases, like \"fewer cartons\" matching \"short shipment\"."},
+ {id:"bm25",x:580,y:95,t:"BM25 index",s:"keyword search",tag:"Sparse index",h:"Exact-word search",
+  d:"A classic keyword index. It catches exact terms the dense model can blur, such as \"SCAR\", \"NCR\", \"$25k\" or a document code."},
+ {id:"q",x:20,y:235,t:"Question",s:"Streamlit chat",tag:"Input",h:"User asks",
+  d:"The user types a plain-English question in the chat UI or the notebook."},
+ {id:"hyb",x:200,y:235,t:"Hybrid retrieve",s:"BM25 + dense → RRF",tag:"Retrieval",h:"Best of both searches",
+  d:"Run both searches (top 8 each), then merge with Reciprocal Rank Fusion: score = Σ 1/(60 + rank). Keep the top k = 4. The inspector toggle shows each ranking separately."},
+ {id:"gate",x:380,y:235,t:"Confidence gate",s:"top score ≥ 0.55?",tag:"Refusal path",h:"Design the \"I don't know\" first",
+  d:"If the best chunk's similarity is below the threshold, skip the LLM and refuse. The threshold is tuned on the eval set, not guessed. This is what stops hallucinated answers."},
+ {id:"prompt",x:560,y:235,t:"Grounded prompt",s:"context only · cite §",tag:"Generation",h:"Answer only from context",
+  d:"System prompt: answer ONLY from the provided chunks, cite <code>[DOC §section]</code> after every claim, and if the chunks don't contain the answer, reply exactly \"I couldn't find this in Meridian's documents.\" Ollama llama3.1:8b by default, or Groq via <code>LLM_PROVIDER</code>."},
+ {id:"ref",x:380,y:330,t:"Refusal",s:"no guess",tag:"Output",h:"Safe refusal",
+  d:"A brief, clear refusal, plus a pointer to where the user might look instead. It's counted in the eval as \"refusal correct\"."},
+ {id:"ans",x:740,y:235,t:"Answer + citations",s:"chips link to chunks",tag:"Output",h:"Cited answer",
+  d:"The answer is shown with citation chips. Clicking a chip highlights the exact chunk in the inspector, so every claim can be checked."},
+ {id:"eval",x:380,y:430,t:"15-question eval",s:"eval/run_eval.py",tag:"Evaluation",h:"Prove it, don't feel it",
+  d:"Scored in code: retrieval hit@4 and MRR against the expected source, citation accuracy, and refusal correctness on unanswerable questions. Faithfulness uses an LLM judge (is every claim supported by a cited chunk?). Failures go in a written analysis."}
+];
+function drawNodes(sel="hyb"){
+  $("#nodes").innerHTML=NODES.map(n=>`<g class="node ${n.id===sel?"on":""}" data-id="${n.id}" tabindex="0"><rect x="${n.x}" y="${n.y}" width="150" height="${n.id==="eval"?36:50}" rx="10"/><text x="${n.x+12}" y="${n.y+(n.id==="eval"?16:22)}">${n.t}</text><text class="sub" x="${n.x+12}" y="${n.y+(n.id==="eval"?30:38)}">${n.s}</text></g>`).join("");
+  const n=NODES.find(n=>n.id===sel);
+  $("#stepinfo").innerHTML=`<div class="tag">${n.tag}</div><h3>${n.h}</h3><p>${n.d}</p><p class="empty">Built in <span class="mono">src/ops_copilot/</span> and shown step by step in <span class="mono">notebooks/01_rag_walkthrough.ipynb</span>.</p>`;
+}
+drawNodes();
+$("#nodes").onclick=e=>{const g=e.target.closest(".node");if(g)drawNodes(g.dataset.id);};
+
+/* EVAL */
+const EV=[
+ ["Direct","What's the recount trigger in a cycle count?","CC"],
+ ["Direct","Who approves a $40k PO?","POA"],
+ ["Direct","How do I handle a short shipment?","OSD"],
+ ["Direct","What's the invoice price tolerance in 3-way match?","3WM"],
+ ["Direct","How fast must a damaged customer return be inspected?","RMA"],
+ ["Direct","What checks are needed before onboarding a supplier?","SUP"],
+ ["Direct","Who signs off a $3,000 inventory write-off?","ADJ"],
+ ["Direct","What's the Platinum account response time?","SLA"],
+ ["Multi-doc","Repeat damaged deliveries from one supplier: what happens?","OSD + NCR"],
+ ["Multi-doc","Can a brand-new supplier get a $60k PO?","SUP + POA"],
+ ["Multi-doc","A short shipment caused an invoice mismatch. Can we pay?","OSD + 3WM"],
+ ["Ambiguous","What's the threshold?","clarify / CC, ADJ, 3WM"],
+ ["Ambiguous","What do I do with bad stock?","OSD / RMA / ADJ"],
+ ["Unanswerable","How many vacation days do staff get?","refuse"],
+ ["Unanswerable","What's our forklift vendor's phone number?","refuse"]
+];
+$("#evalrows").innerHTML=EV.map((r,i)=>`<tr><td>${i+1}</td><td><span class="pill">${r[0]}</span></td><td>${r[1]}</td><td class="mono" style="background:none">${r[2]}</td><td><span class="pill">pending</span></td></tr>`).join("");
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,.view").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#"+b.dataset.v).classList.add("on");});
+</script>
+</body>
+</html>
