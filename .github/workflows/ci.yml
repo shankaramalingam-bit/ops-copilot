@@ -5,23 +5,34 @@ permissions:
 jobs:
   gates:
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.12.14"
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install 3.12
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          version: "0.12.5"
+      - run: uv python install 3.12.14
       - run: uv sync --frozen
       - run: for g in scripts/gate_*.sh; do echo "::group::$g"; bash "$g"; echo "::endgroup::"; done
+      - run: bash scripts/gate_secrets.sh --history
   deploy:
     needs: gates            # depends ONLY on the gate scripts
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: echo "Replace with the stack's deploy command"
   governance:               # optional, non-blocking; deploy never depends on it
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: echo "Add governance checks here only when an incident earns them"
