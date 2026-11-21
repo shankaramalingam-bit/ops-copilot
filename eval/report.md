@@ -116,7 +116,7 @@ After the official run, the orchestrator re-asked Q10 and Q11 once each through 
 - **Q10 re-ask:** refused again with `invalid_citation`. The raw content cited [WH-002 §4.1], [WH-002 §4.2] and [WH-002 §4.3], and also contained a bare doc mention "WH‑005" written with a U+2011 non-breaking hyphen and no §. That bare mention is the likely trigger of the residual-citation check (an inference, not verified).
 - **Q11 re-ask:** the answer was accepted, not refused. So the official run's Q11 refusal is nondeterministic. The official run's raw output was not recorded, so its exact cause is unknown. One possibility is that reasoning tokens consumed the output token budget; this is unverified.
 
-No parser or validator change was made or proposed. Possible next steps, all owner decisions:
+No parser or validator change was made or proposed. Possible next steps, all owner decisions (the owner chose option 1; options 2–5 are in the Phase 2 backlog under Next steps):
 
 1. Keep the validator as is and accept the two false refusals as the recorded result.
 2. Record the raw model output (and `reasoning_content` and finish reason) for refused answers in future runs, so causes are known rather than inferred.
@@ -132,6 +132,25 @@ No parser or validator change was made or proposed. Possible next steps, all own
 - **Data left the machine.** The corpus and questions were sent to Groq with the owner's approval (`EVAL_ALLOW_REMOTE=1`).
 - **Nondeterminism.** Temperature is 0, but outputs are still nondeterministic (the Q11 re-ask). One run per iteration; no spread is available.
 - **Model choice.** The owner chose `openai/gpt-oss-120b`; `llama-3.3-70b-versatile` was not available on the owner's key.
+
+## Next steps
+
+**Decision (owner):** Iteration 2 is accepted as the recorded Phase 1 result. Faithfulness (0.867) stays below the 0.90 bar and is recorded as a FAIL. No further changes are made to Phase 1.
+
+### Phase 2 backlog
+
+From the Iteration 2 analysis:
+
+1. **Record raw output for refused answers.** Store the raw model output, `reasoning_content` and finish reason for refused answers in future eval runs, so causes such as the Q11 `no_valid_citations` refusal are known rather than inferred.
+2. **Bare doc IDs in answers.** Decide whether the citation validator should treat a bare doc ID with no section (the Q10 "WH‑005" case) differently. Per the governance policy, first measure how many existing records such a rule would change.
+3. **Output token budget for reasoning models.** Review whether reasoning tokens can exhaust the output budget and leave the answer empty or cut off (unverified for Q11).
+4. **Repeat runs.** Run the eval several times per configuration to measure spread, since there is one run per iteration and outputs are nondeterministic.
+
+Low-priority follow-ups:
+
+5. **`eval/calibrate.py` does not load `.env`.** Unlike `eval/run_eval.py`, it reads only the shell environment.
+6. **`EMBED_MODEL` is printed without `repr`.** In `eval/run_eval.py` and `eval/calibrate.py`, a value containing a newline could fake console lines. It cannot expose the API key.
+7. **Notebook table alignment.** In the notebook's eval output, the Q10 and Q11 rows ("yes (invalid_citation)", "yes (no_valid_citations)") overflow the refused column. Cosmetic only.
 
 ---
 
